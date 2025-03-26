@@ -7,27 +7,25 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 __version__ = "0.0.0"
 
-# Server setup
-SERVER_REPO_NAME = "XenQ-Server"
-SERVER_SRC_REPO = "xenq_server"
-
+REPO_NAME = "XenQ"
 AUTHOR_USER_NAME = "SirajuddinShaik"
+SRC_REPO = "xenq_server"
 AUTHOR_EMAIL = "shaiksirajuddin9949@gmail.com"
 
 
 # Server setup
 setuptools.setup(
-    name=SERVER_SRC_REPO,
+    name=SRC_REPO,
     version=__version__,
     author=AUTHOR_USER_NAME,
     author_email=AUTHOR_EMAIL,
-    description="XenQ Server: Backend AI Assistant for Processing and Retrieval",
+    description="XenQ: An Intelligent RAG-Powered AI Assistant for Seamless Data Interaction",
     long_description=long_description,
     long_description_content="text/markdown",
-    url=f"https://github.com/{AUTHOR_USER_NAME}/{SERVER_REPO_NAME}",
+    url=f"https://github.com/{AUTHOR_USER_NAME}/{REPO_NAME}",
     project_urls={
-        "Bug Tracker": f"https://github.com/{AUTHOR_USER_NAME}/{SERVER_REPO_NAME}/issues",
+        "Bug Tracker": f"https://github.com/{AUTHOR_USER_NAME}/{REPO_NAME}/issues",
     },
-    package_dir={"": "server/src"},
-    packages=setuptools.find_packages(where="server/src")
+    package_dir={"": "src"},
+    packages=setuptools.find_packages(where="src")
 )

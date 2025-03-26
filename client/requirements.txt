@@ -1,1 +1,20 @@
 # requirements.txt for client/requirements.txt
+requests
+pandas
+numpy
+# python-box==6.0.2
+# pyYAML
+tqdm
+# ensure==1.0.2
+python-dotenv
+# joblib
+# types-PyYAML
+-e .
+
+
+
+# pyMuPDF
+setuptools
+# pinecone-client
+# datasets
+# chainlit
