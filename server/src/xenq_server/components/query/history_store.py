@@ -1,1 +1,1 @@
-# history_store.py for server/src/xenq_server/components/query/history_store.py
+# history_store.py for agent/src/xenq_agent/components/query/history_store.py

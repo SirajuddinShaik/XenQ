@@ -1,1 +1,1 @@
-# query_manager.py for server/src/xenq_server/components/query/query_manager.py
+# query_manager.py for agent/src/xenq_agent/components/query/query_manager.py

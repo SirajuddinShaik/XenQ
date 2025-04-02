@@ -6,17 +6,13 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 __version__ = "0.0.0"
 
-# Client setup
-CLIENT_REPO_NAME = "XenQ-Client"
-CLIENT_SRC_REPO = "xenq_client"
-
-
 REPO_NAME = "XenQ"
 AUTHOR_USER_NAME = "SirajuddinShaik"
 SRC_REPO = "xenq_client"
 AUTHOR_EMAIL = "shaiksirajuddin9949@gmail.com"
 
 
+# Client setup
 setuptools.setup(
     name=SRC_REPO,
     version=__version__,

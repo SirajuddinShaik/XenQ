@@ -9,59 +9,6 @@ project_name = "XenQ"
 # List of files to create with their relative paths
 list_of_files = [
     # CI/CD & Documentation
-    "docs/architecture.md",
-    "research/trials.ipynb",
-    "schema.yaml",
-    "params.yaml",
-    "setup.py",
-    "README.md",
-    # ---------------- Client Application ----------------
-    # Client Source Files
-    "client/src/xenq_client/__init__.py",
-    "client/src/xenq_client/api/client_api.py",
-    "client/src/xenq_client/components/file_manager.py",
-    "client/src/xenq_client/components/ui_manager.py",
-    "client/src/xenq_client/config/__init__.py",
-    "client/src/xenq_client/utils/__init__.py",
-    "client/src/xenq_client/main.py",
-    # Client Templates & Tests
-    "client/templates/index.html",
-    "client/tests/test_client.py",
-    # Client dependencies and Dockerfile
-    "client/requirements.txt",
-    "client/Dockerfile",
-    "client/setup.py",
-    # ---------------- Server Application ----------------
-    # Server Source Files
-    "server/src/xenq_server/__init__.py",
-    "server/src/xenq_server/api/server_api.py",
-    # LLM Components
-    "server/src/xenq_server/components/llm/__init__.py",
-    "server/src/xenq_server/components/llm/llama_inference.py",
-    "server/src/xenq_server/components/llm/model_loader.py",
-    # Retrieval Components
-    "server/src/xenq_server/components/retrieval/__init__.py",
-    # Query Management Components
-    "server/src/xenq_server/components/query/__init__.py",
-    "server/src/xenq_server/components/query/query_manager.py",
-    "server/src/xenq_server/components/query/history_store.py",
-    # Server Configuration & Utilities
-    "server/src/xenq_server/config/settings.py",
-    "server/src/xenq_server/config/__init__.py",
-    "server/src/xenq_server/utils/__init__.py",
-    "server/src/xenq_server/main.py",
-    # Server Config, Tests and Docker
-    "server/config/config.yaml",
-    "server/tests/test_server.py",
-    "server/requirements.txt",
-    "server/Dockerfile",
-    "server/setup.py",
-]
-
-
-# List of files to create with their relative paths
-list_of_files = [
-    # CI/CD & Documentation
     ".github/workflows/ci.yml",
     "docs/architecture.md",
     "research/trials.ipynb",
@@ -69,7 +16,8 @@ list_of_files = [
     "params.yaml",
     "setup.py",
     "README.md",
-    # ---------------- Client Application ----------------
+    
+    # ---------------- CLIENT Application ----------------
     "client/src/xenq_client/__init__.py",
     "client/src/xenq_client/api/__init__.py",
     "client/src/xenq_client/api/client_api.py",
@@ -80,45 +28,75 @@ list_of_files = [
     "client/src/xenq_client/config/settings.py",
     "client/src/xenq_client/utils/__init__.py",
     "client/src/xenq_client/utils/helpers.py",
-    "client/src/xenq_client/main.py",
-    # Client Templates & Tests
+    "client/main.py",
     "client/templates/index.html",
     "client/tests/__init__.py",
     "client/tests/test_client.py",
-    # Client dependencies and Dockerfile
     "client/requirements.txt",
     "client/Dockerfile",
     "client/setup.py",
-    # ---------------- Server Application ----------------
+
+    # ---------------- SERVER Application ----------------
     "server/src/xenq_server/__init__.py",
     "server/src/xenq_server/api/__init__.py",
     "server/src/xenq_server/api/server_api.py",
-    # LLM Components
     "server/src/xenq_server/components/__init__.py",
-    "server/src/xenq_server/components/llm/__init__.py",
-    "server/src/xenq_server/components/llm/llama_inference.py",
-    "server/src/xenq_server/components/llm/model_loader.py",
-    # Retrieval Components
-    "server/src/xenq_server/components/retrieval/__init__.py",
-    "server/src/xenq_server/components/retrieval/context_manager.py",
-    "server/src/xenq_server/components/retrieval/vector_store.py",
-    # Query Management Components
-    "server/src/xenq_server/components/query/__init__.py",
-    "server/src/xenq_server/components/query/query_manager.py",
-    "server/src/xenq_server/components/query/history_store.py",
-    # Server Configuration & Utilities
+    "server/src/xenq_server/components/authentication.py",
+    "server/src/xenq_server/components/user_management.py",
     "server/src/xenq_server/config/__init__.py",
     "server/src/xenq_server/config/settings.py",
     "server/src/xenq_server/utils/__init__.py",
     "server/src/xenq_server/utils/logger.py",
-    "server/src/xenq_server/main.py",
-    # Server Config, Tests, and Docker
+    "server/main.py",
     "server/config/config.yaml",
     "server/tests/__init__.py",
     "server/tests/test_server.py",
     "server/requirements.txt",
     "server/Dockerfile",
     "server/setup.py",
+
+    # ---------------- AGENT Application (Middleware Layer) ----------------
+    "agent/src/xenq_agent/__init__.py",
+    "agent/src/xenq_agent/api/__init__.py",
+    "agent/src/xenq_agent/api/agent_api.py",
+    "agent/src/xenq_agent/components/__init__.py",
+    
+    # LLM (Language Model) Handling
+    "agent/src/xenq_agent/components/llm/__init__.py",
+    "agent/src/xenq_agent/components/llm/llama_inference.py",
+    "agent/src/xenq_agent/components/llm/model_loader.py",
+
+    # Retrieval Augmented Generation (RAG) Components
+    "agent/src/xenq_agent/components/retrieval/__init__.py",
+    "agent/src/xenq_agent/components/retrieval/context_manager.py",
+    "agent/src/xenq_agent/components/retrieval/vector_store.py",
+    
+    # Query Processing
+    "agent/src/xenq_agent/components/query/__init__.py",
+    "agent/src/xenq_agent/components/query/query_manager.py",
+    "agent/src/xenq_agent/components/query/history_store.py",
+
+    # Code Execution Engine (for running Python code remotely)
+    "agent/src/xenq_agent/components/code_execution/__init__.py",
+    "agent/src/xenq_agent/components/code_execution/python_executor.py",
+    
+    # Internet Query Processing (Web Search, API Calls)
+    "agent/src/xenq_agent/components/web_query/__init__.py",
+    "agent/src/xenq_agent/components/web_query/search_engine.py",
+
+    # Agent Configuration & Utilities
+    "agent/src/xenq_agent/config/__init__.py",
+    "agent/src/xenq_agent/config/settings.py",
+    "agent/src/xenq_agent/utils/__init__.py",
+    "agent/src/xenq_agent/utils/logger.py",
+    "agent/main.py",
+
+    # Agent Tests and Dependencies
+    "agent/tests/__init__.py",
+    "agent/tests/test_agent.py",
+    "agent/requirements.txt",
+    "agent/Dockerfile",
+    "agent/setup.py",
 ]
 
 # Create each directory and file if they do not exist

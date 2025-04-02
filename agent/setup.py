@@ -1,4 +1,4 @@
-# setup.py for server/setup.py
+# setup.py for agent/setup.py
 import setuptools
 
 with open("README.md", "r", encoding="utf-8") as f:
@@ -8,11 +8,11 @@ __version__ = "0.0.0"
 
 REPO_NAME = "XenQ"
 AUTHOR_USER_NAME = "SirajuddinShaik"
-SRC_REPO = "xenq_server"
+SRC_REPO = "xenq_agent"
 AUTHOR_EMAIL = "shaiksirajuddin9949@gmail.com"
 
 
-# Server setup
+# Agent setup
 setuptools.setup(
     name=SRC_REPO,
     version=__version__,
