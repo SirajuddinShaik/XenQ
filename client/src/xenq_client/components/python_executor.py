@@ -4,6 +4,8 @@ import io
 import os
 import json
 import requests
+import mimetypes
+from flask import Flask, Response, send_file, request
 
 class PythonExecutor:
     def __init__(self):
@@ -50,6 +52,20 @@ class PythonExecutor:
                 return {"status": "error", "message": f"File {file_path} does not exist."}
         except Exception as e:
             return {"status": "error", "message": str(e)}
+        
+    def upload_file(self, file_path):
+
+        file_path = os.path.normpath(file_path)
+        file_size = os.path.getsize(file_path)
+        print(f"Sending file: {file_path}, Size: {file_size} bytes")  # Debugging
+        # print(file_path)
+        if not file_path:
+            return "File path is required", 400
+        try:
+            return send_file(file_path, as_attachment=True, mimetype=mimetypes.guess_type(file_path)[0])
+
+        except FileNotFoundError:
+            return "File not found", 404
         
 # Example usage
 if __name__ == "__main__":
