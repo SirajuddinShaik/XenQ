@@ -1,2 +1,7 @@
 # requirements.txt for server/requirements.txt
+fastapi
+chainlit
+psycopg2-binary
+tabulate
+duckduckgo-search
 -e .

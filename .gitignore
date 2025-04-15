@@ -177,3 +177,4 @@ cython_debug/
 
 # Directories to ignore
 server/userdata
+server/.chainlit
