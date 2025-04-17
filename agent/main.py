@@ -4,28 +4,53 @@ import asyncio
 import os
 import json
 from uuid import uuid4
+import random
 from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
 import torch
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 from transformers.models.auto.modeling_auto import  AutoModelForSeq2SeqLM
 from functools import lru_cache
 
+temp_output = """Let me think this through for you…
 
+::internal
+### ReAct Trace:
+Thought: First, I need to get the current and weekend weather in Paris.
+Action:
+Observation: Weather in Paris this weekend: Saturday - 18°C, partly cloudy; Sunday - 21°C, sunny.
+
+Thought: Now I’ll check for top-rated local events or festivals in Paris this weekend.
+Action:
+```json
+{
+  "function_calls": [
+    {
+      "name": "search_web",
+      "parameters": {
+        "query": "top events or festivals in Paris this weekend"
+      }
+    }
+  ]
+}
+```
+:::
+
+You're in for a lovely weekend in Paris! 🌤️
+
+- **Saturday**: 18°C and partly cloudy — great for exploring outdoor markets or walking tours.
+- **Sunday**: 21°C and sunny — perfect weather for parks or riverside picnics.
+
+🎉 **Top Events This Weekend**:
+- **🎶 Fête de la Musique** at Parc de la Villette: Live music, outdoor vibes, and tasty food trucks.
+- **🌮 Paris Food Market** near Bastille (Sunday): Street food and global flavors.
+- **🎨 Montmartre Spring Art Walk**: Explore creative works from local artists in a charming neighborhood.
+
+Pack light layers, and enjoy your Parisian adventure! 🇫🇷✨
+"""
 app = FastAPI()
 engine = None
 chat_histories = {}
 
-# Initialize vLLM engine
-async def out(engine):
-    params = SamplingParams(
-        top_k=1,
-        temperature=0.8,
-        max_tokens=1000,
-        stop=["<|eot_id|>"],
-    )
-    prompt = "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\nYou are a professional PostgreSQL expert who generates optimized, correct SQL queries from natural language questions based on the schema provided. \nThink step by step to break down the user's request, reason about how to join and filter relevant tables, and form an efficient SQL query. \nUse Common Table Expressions (CTEs) when needed for readability and performance. Always use explicit JOINs.\n\nSchema Format:\n- TableName (Row count)\n  - column_name: data_type [PK|FK → referenced_table.column], [NOT NULL]\n\nInstructions:\n- Think aloud step by step and genertate.\n- Explain any assumptions briefly.\n- At the end, return the one final SQL query inside a single ```sql code block.\n- Do not include markdown outside the code block.\n- If the query includes unknown terms or entities not found in the schema, respond only with:\n\n```sql\nSELECT 'Unable to generate query: entity not found in schema.' AS message;\n```\n\n<|eot_id|><|start_header_id|>user<|end_header_id|>\n## Schema\n### departments (9 rows)\n- dept_no: character (PK), NOT NULL\n- dept_name: character varying, NOT NULL\n\n### dept_emp (331041 rows)\n- emp_no: integer (PK) (FK → employees.emp_no), NOT NULL\n- from_date: date, NOT NULL\n- to_date: date, NOT NULL\n- dept_no: character (PK) (FK → departments.dept_no), NOT NULL\n\n### employees (299509 rows)\n- emp_no: integer (PK), NOT NULL\n- birth_date: date, NOT NULL\n- gender: USER-DEFINED\n- hire_date: date, NOT NULL\n- first_name: character varying, NOT NULL\n- last_name: character varying, NOT NULL\n\n### dept_manager (24 rows)\n- emp_no: integer (PK) (FK → employees.emp_no), NOT NULL\n- from_date: date, NOT NULL\n- to_date: date, NOT NULL\n- dept_no: character (PK) (FK → departments.dept_no), NOT NULL\n\n### salaries (2839079 rows)\n- emp_no: integer (PK) (FK → employees.emp_no), NOT NULL\n- salary: integer, NOT NULL\n- from_date: date (PK), NOT NULL\n- to_date: date, NOT NULL\n\n### titles (442547 rows)\n- emp_no: integer (PK) (FK → employees.emp_no), NOT NULL\n- from_date: date (PK), NOT NULL\n- to_date: date\n- title: character varying (PK), NOT NULL\n\n\n## Query Request\nWhich departments have more than 70% of employees of one gender (current employees only)? Show dept_name, gender, and percentage.\n<|eot_id|><|start_header_id|>assistant<|end_header_id|>"
-    output = await engine.generate(prompt, params, "user_id")
-    # print(output[0].outputs[0].text)
 
 @lru_cache(maxsize=1)
 def get_engine():
@@ -33,11 +58,10 @@ def get_engine():
         AsyncEngineArgs(
             model="meta-llama/Llama-3.1-8B-Instruct",
             trust_remote_code=True,
-            max_model_len=2000,
+            max_model_len=8000,
             max_num_seqs = 1,
-            max_num_batched_tokens=2048,
             quantization="fp8",
-            gpu_memory_utilization=0.44,
+            gpu_memory_utilization=0.47,
             
         )
     )
@@ -55,7 +79,7 @@ async def generate_token_stream(prompt: str, user_id: str):
     engine_instance = get_engine()
     params = SamplingParams(
         top_p=0.9,
-        temperature=0.8,
+        temperature=0.6,
         max_tokens=2000,
         stop=["<|eot_id|>", ":::"],
         include_stop_str_in_output = True,
@@ -90,7 +114,7 @@ async def generate_output(prompt: str, user_id: str, temperature):
         top_p=0.9,
         temperature=temperature,
         max_tokens=2000,
-        stop=["<|eot_id|>"],
+        stop=["<|eot_id|>", ":::"],
         include_stop_str_in_output = True,
     )
 
@@ -103,11 +127,11 @@ async def generate_output(prompt: str, user_id: str, temperature):
 
 
 
-async def generate_fake_tokens(prompt: str):
-    fake_response = [prompt]
+async def generate_fake_tokens(prompt: str, user_id):
+    fake_response = temp_output.split()
     for token in fake_response:
-        await asyncio.sleep(0.3)  # simulate delay between tokens
-        yield f"data: {json.dumps({'token': token})}\n\n"
+        await asyncio.sleep(0.05)  # simulate delay between tokens
+        yield f"data: {json.dumps({'token': ' '+token})}\n\n"
 
 
 
@@ -132,27 +156,6 @@ summarize_prompt = (
     "If it is not relevant at all, respond only with this exact token: </s>"
 )
 
-
-# @app.post("/summarize")
-async def gen_summary1(request: Request):
-    # prompt = request.query_params.get("prompt","str")
-    print("request")
-    body = await request.json()
-    content = body.get("content", [])
-    content = content["content"]
-    query = body.get("query", "How to Become an NLP Scientist")
-    content = [summarize_prompt.format(query=query, content=data ) for data in content]
-    summarizer, tokenizer = get_summarizer()
-    inputs = tokenizer(content, return_tensors="pt", padding=True, truncation=True, max_length=1024)
-    # Move to GPU if available
-    input_ids = inputs["input_ids"].to(summarizer.device)
-    attention_mask = inputs["attention_mask"].to(summarizer.device)
-    summaries_ids = summarizer.generate(input_ids=input_ids, attention_mask=attention_mask, 
-                               max_length=130, min_length=0, do_sample=False)
-
-    # Decode summaries
-    summaries = tokenizer.batch_decode(summaries_ids, skip_special_tokens=True)
-    return {"output":[summary for summary in summaries], "status":200}
 
 @app.post("/summarize")
 async def gen_summary(request: Request):
@@ -199,6 +202,22 @@ async def gen_summary(request: Request):
         # Decode summaries
         batch_summaries = tokenizer.batch_decode(summaries_ids, skip_special_tokens=True)
         summaries.extend(batch_summaries)
+    summaries = [chunk for chunk in summaries if query not in chunk]
+    # joined_summary = summarize_prompt.format(query=query, content=" ".join(summaries))
+    # inputs = tokenizer([joined_summary], return_tensors="pt", padding=True, truncation=True, max_length=1024)
+    # summaries_ids = summarizer.generate(
+    #         input_ids=batch_input_ids,
+    #         attention_mask=batch_attention_mask,
+    #         max_length=1000,
+    #         min_length=100,
+    #         do_sample=False
+    #     )
+    # print(summaries_ids)
+    # summary = tokenizer.batch_decode(summaries_ids, skip_special_tokens=True)
+    total = len(summaries)
+    if total > 10:
+        indices = sorted(random.sample(range(total), min(10,total)))
+        summaries = [summaries[i] for i in indices]
     del input_ids
     del attention_mask
     return {"output": summaries, "status": 200}

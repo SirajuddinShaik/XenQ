@@ -9,7 +9,7 @@ class WebsiteScraper:
     def scrape(url: str) -> str:
         """Fetch raw HTML content from the given URL."""
         try:
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=2)
             response.raise_for_status()
             return response.text
         except requests.exceptions.RequestException as e:
