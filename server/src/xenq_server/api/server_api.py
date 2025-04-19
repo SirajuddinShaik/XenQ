@@ -25,6 +25,7 @@ from typing import Optional
 #         return None
 
 tool_invoker = ToolInvoker()
+tool_invoker.update_sql_uri("postgresql://admin:admin123@localhost:5432/college")
 
 async def start(*args):
     await cl.ChatSettings(widgets).send()
@@ -37,8 +38,6 @@ async def update_settings(settings):
     cl.user_session.set("temperature",settings["Temperature"])
     print("on_settings_update", settings)
 
-
-
 async def stream_response(payload: dict, msg=None):
     headers = {
         "Accept": "text/event-stream",
@@ -50,10 +49,13 @@ async def stream_response(payload: dict, msg=None):
         await msg.send()
 
     url = f"{FLASK_BACKEND_URL}/stream"
-    hist: HistoryStore = cl.user_session.get("history", HistoryStore())
     response = ""
-    internal_reasoning = ""
     hide = False
+    hidden = ""
+    visible = ""
+
+    tag_buffer = ""
+    buffer_limit = 20  # Look back over the last N characters to detect tag boundaries
 
     session = await AioHTTPSessionManager.get_session()
 
@@ -67,42 +69,88 @@ async def stream_response(payload: dict, msg=None):
                         token = data.get("token", "")
                         response += token
 
-                        if response.endswith("::internal"):
+                        tag_buffer += token
+                        tag_buffer = tag_buffer[-buffer_limit:]  # Keep last N characters
+
+                        if "<internal>" in tag_buffer:
                             hide = True
-                        await msg.stream_token(token)
-                        
+                            tag_buffer = ""  # Clear after trigger
+                            continue  # Skip this token
+
+                        if "</internal>" in tag_buffer:
+                            hide = False
+                            tag_buffer = ""  # Clear after trigger
+                            continue  # Skip this token
+
                         if hide:
-                            internal_reasoning += token
-                        if response.endswith(":::"):  # Tool invocation
-                            hist.append_content("assistant", response)
-                            hist.append_reasoning(internal_reasoning)
-                            await msg.update()
-                            return {
-                                "token": token,
-                                "internal_reasoning": internal_reasoning,
-                                "response": response,
-                                "msg": msg
-                            }
-
-                        if token == "<|eot_id|>":  # End of response
-                            await msg.update()
-                            hist.add_reasoning(response)
-                            return {
-                                "token": token,
-                                "response": response
-                            }
-
+                            hidden += token
+                        else:
+                            visible += token
+                            await msg.stream_token(token)
 
                     except Exception as e:
                         print("Streaming error:", e)
     except Exception as e:
         print("Request failed:", e)
 
-    await msg.update()
+    print("hidden: ", hidden)
+    print("visible: ", visible)
+
     return {
-        "token": "error",
+        "token": token,
         "response": response,
-        "internal_reasoning": internal_reasoning,
+        "msg": msg
+    }
+
+async def stream_response1(payload: dict, msg=None):
+    headers = {
+        "Accept": "text/event-stream",
+        "Content-Type": "application/json"
+    }
+
+    if msg is None:
+        msg = cl.Message(content="")
+        await msg.send()
+
+    url = f"{FLASK_BACKEND_URL}/stream"
+    response = ""
+    hide = False
+    hidden=""
+    open=""
+
+    session = await AioHTTPSessionManager.get_session()
+
+    try:
+        async with session.post(url, headers=headers, json=payload) as resp:
+            async for line in resp.content:
+                decoded = line.decode("utf-8").strip()
+                if decoded.startswith("data:"):
+                    try:
+                        data = json.loads(decoded[5:])
+                        token = data.get("token", "")
+                        response += token
+
+                        if "<internal>" in response[-10:]:
+                            hide = True
+                        if "</internal>" in response[-10:]:
+                            hide = False
+                        
+                        if hide:
+                            hidden+=token
+                        else:
+                            open+=token
+                        await msg.stream_token(token)
+
+
+                    except Exception as e:
+                        print("Streaming error:", e)
+    except Exception as e:
+        print("Request failed:", e)
+    print("hidden: ", hidden)
+    print("open: ", open)
+    return {
+        "token": token,
+        "response": response,
         "msg": msg
     }
 
@@ -112,8 +160,7 @@ async def stream_response(payload: dict, msg=None):
 
 async def on_message(message: cl.Message):
     hist: HistoryStore = cl.user_session.get("history", HistoryStore())
-    temperature = cl.user_session.get("temperature", 0.7)
-    cl.user_session.set("history", hist)
+    temperature = cl.user_session.get("temperature", 0.5)
 
     status = hist.append_content(role="user", content=message.content)
     if not status:
@@ -121,22 +168,19 @@ async def on_message(message: cl.Message):
         return
 
     prompt = hist.build_prompt()
-    print(prompt)
 
     if message.command != "stream":
         response = await stream_response({"prompt": prompt, "command": message.command})
         retry_count = 0
         max_retries = 5  # Avoid infinite loops
         hist.append_content("assistant", response.get("response", ""))
-        
-        while response and response.get("internal_reasoning", "") and retry_count < max_retries:
+        while response.get("token") != "<|eot_id|>" and response.get("response", False) and retry_count < max_retries:
             retry_count += 1
-            # Check if response ends with ':::' to decide on tool use
-            if response.get("internal_reasoning", "").endswith(":::"):
-                output = await tool_invoker.pipeline(response["internal_reasoning"])
+            # Check if response ends with '</tool>​' to decide on tool use
+            if "</tool>" in  response.get("response", "")[-10:]:
+                output = await tool_invoker.pipeline(response.get("response"))
                 hist.append_content("backend", output)
                 prompt = hist.build_prompt()
-                print(prompt)
                 # Reset internal reasoning before the next call
                 response = await stream_response({
                     "prompt": prompt,
@@ -144,7 +188,9 @@ async def on_message(message: cl.Message):
                 }, response.get("msg"))
 
             else:
+                await response.get("msg").update() 
                 break  # No tool use trigger, break the loop
+                            
 
     else:
         response = await non_stream_response({

@@ -24,7 +24,7 @@ widgets = [
             Slider(
                 id="Temperature",
                 label="OpenAI - Temperature",
-                initial=1,
+                initial=0.4,
                 min=0,
                 max=2,
                 step=0.1,

@@ -1,8 +1,8 @@
 # history_store.py for agent/src/xenq_agent/components/query/history_store.py
 
-from xenq_server.utils.sys_p import p1, p2, p4, p3
+from xenq_server.utils.sys_p import p1, p2, p4, p3, p7, p8
 default_system_msg = "Your next-gen AI assistant, built to understand, generate, and evolve with every query. Ask smart. Get smarter."
-default_system_msg = p4
+default_system_msg = p8
 class HistoryStore:
     def __init__(self, system_msg = default_system_msg):
         self.system_msg = {"msg": system_msg, "cum_word_len": len(system_msg.split())}
@@ -66,6 +66,6 @@ class HistoryStore:
         "assistant": "{content}",
         "memory": "### Memory\n- {content.join('\n- ')}",
         "table": "#### Query: {query}\nOutput:\n{table}",
-        "backend": "<|start_header_id|>backend<|end_header_id|>\n{content}\n<|eot_id|><|start_header_id|>assistant<|end_header_id|>",
+        "backend": "<|start_header_id|>backend<|end_header_id|>\n{content}\n\n- If the backend fails, retry 2–3 times; since internal blocks are hidden, explain the result naturally as if you figured it out, and if all retries fail, inform the user with a clear, friendly explanation of the error.<|eot_id|><|start_header_id|>assistant<|end_header_id|>",
         "web_query": ""
     }

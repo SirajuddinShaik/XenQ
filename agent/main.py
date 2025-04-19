@@ -5,6 +5,7 @@ import os
 import json
 from uuid import uuid4
 import random
+from torch.cuda import temperature
 from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
 import torch
 from transformers.models.auto.tokenization_auto import AutoTokenizer
@@ -13,7 +14,7 @@ from functools import lru_cache
 
 temp_output = """Let me think this through for you…
 
-::internal
+\n<internal>
 ### ReAct Trace:
 Thought: First, I need to get the current and weekend weather in Paris.
 Action:
@@ -33,10 +34,22 @@ Action:
   ]
 }
 ```
-:::
+</internal>
 
 You're in for a lovely weekend in Paris! 🌤️
-
+Action:
+```json
+{
+  "function_calls": [
+    {
+      "name": "search_web",
+      "parameters": {
+        "query": "top events or festivals in Paris this weekend"
+      }
+    }
+  ]
+}
+```
 - **Saturday**: 18°C and partly cloudy — great for exploring outdoor markets or walking tours.
 - **Sunday**: 21°C and sunny — perfect weather for parks or riverside picnics.
 
@@ -75,13 +88,13 @@ def get_summarizer():
     return summarizer, tokenizer
 
 
-async def generate_token_stream(prompt: str, user_id: str):
+async def generate_token_stream(prompt: str, user_id: str, temperature):
     engine_instance = get_engine()
     params = SamplingParams(
         top_p=0.9,
-        temperature=0.6,
+        temperature=temperature,
         max_tokens=2000,
-        stop=["<|eot_id|>", ":::"],
+        stop=["<|eot_id|>", ":::", "</tool>"],
         include_stop_str_in_output = True,
     )
     prev_text = ""
@@ -97,13 +110,14 @@ async def generate_token_stream(prompt: str, user_id: str):
 async def chat(request: Request):
     body = await request.json()
     prompt = body.get("prompt", "")
+    temperature  =body.get("temperature", float(0.5))
     # print(prompt)
     user_id = body.get("user_id", str(uuid4()))
     if not prompt:
         return {"error": "Missing prompt"}
 
     async def event_stream():
-        async for token in generate_token_stream(prompt, user_id):
+        async for token in generate_fake_tokens(prompt, user_id, temperature):
             yield token
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -114,7 +128,7 @@ async def generate_output(prompt: str, user_id: str, temperature):
         top_p=0.9,
         temperature=temperature,
         max_tokens=2000,
-        stop=["<|eot_id|>", ":::"],
+        stop=["<|eot_id|>", ":::", "</tool>"],
         include_stop_str_in_output = True,
     )
 
@@ -127,10 +141,10 @@ async def generate_output(prompt: str, user_id: str, temperature):
 
 
 
-async def generate_fake_tokens(prompt: str, user_id):
+async def generate_fake_tokens(prompt: str, user_id, temp):
     fake_response = temp_output.split()
     for token in fake_response:
-        await asyncio.sleep(0.05)  # simulate delay between tokens
+        await asyncio.sleep(0.1)  # simulate delay between tokens
         yield f"data: {json.dumps({'token': ' '+token})}\n\n"
 
 
@@ -223,5 +237,5 @@ async def gen_summary(request: Request):
     return {"output": summaries, "status": 200}
 
 
-engine = get_engine()
-get_summarizer()
+# engine = get_engine()
+# get_summarizer()

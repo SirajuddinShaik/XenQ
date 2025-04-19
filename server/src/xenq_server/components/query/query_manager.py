@@ -1,6 +1,9 @@
 # query_manager.py for agent/src/xenq_agent/components/query/query_manager.py
 
 import psycopg2
+import re
+from xenq_server.api import AioHTTPSessionManager
+
 class QueryManager:
 
     def __init__(self, uri, agent_uri = "http://localhost:5005/prompt"):
@@ -10,10 +13,14 @@ class QueryManager:
             self.postgres_cursor= self.conn.cursor()
             self.schema = self.get_llm_friendly_schema(self.postgres_cursor)
             self.conn_status = True
+            self.output_file = "./output.txt"
         except Exception as e:
             self.conn_status = False
+        
+    def get_status(self):
+        return self.conn_status
 
-    def get_llm_friendly_schema(self, cur):
+    def get_llm_friendly_schema1(self, cur):
 
         cur.execute("""
             SELECT table_name
@@ -80,8 +87,107 @@ class QueryManager:
 
         
         return "\n".join(schema_output)
+    
+    def get_llm_friendly_schema(self, cur):
+        cur.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema='public' AND table_type='BASE TABLE'
+        """)
+        tables = [r[0] for r in cur.fetchall()]
 
-    def execute_query(self, sql_query = "SELECT * FROM employees1 LIMIT 5;"):
+        schema_output = []
+
+        for table in tables:
+            # Get row count
+            cur.execute(f"SELECT COUNT(*) FROM {table}")
+            row_count = cur.fetchone()[0]
+
+            # Get columns
+            cur.execute(f"""
+                SELECT column_name, data_type, is_nullable
+                FROM information_schema.columns
+                WHERE table_name = %s
+            """, (table,))
+            columns = cur.fetchall()
+
+            # Get primary keys
+            cur.execute(f"""
+                SELECT kcu.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                WHERE tc.table_name = %s AND tc.constraint_type = 'PRIMARY KEY'
+            """, (table,))
+            pk_columns = {r[0] for r in cur.fetchall()}
+
+            # Get foreign keys
+            cur.execute(f"""
+                SELECT
+                    kcu.column_name,
+                    ccu.table_name AS foreign_table,
+                    ccu.column_name AS foreign_column
+                FROM
+                    information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                JOIN information_schema.constraint_column_usage ccu
+                    ON ccu.constraint_name = tc.constraint_name
+                WHERE
+                    tc.constraint_type = 'FOREIGN KEY' AND
+                    tc.table_name = %s
+            """, (table,))
+            fk_map = {(r[0]): f"{r[1]}.{r[2]}" for r in cur.fetchall()}
+
+            # Format schema info
+            schema_output.append(f"### {table} ({row_count} rows)")
+            for col, dtype, nullable in columns:
+                if dtype in ["character varying", "character", "text"]:
+                    readable_type = "text"
+                elif dtype in ["integer", "bigint", "smallint", "numeric", "decimal"]:
+                    readable_type = "number"
+                elif dtype in ["date", "timestamp", "timestamp without time zone"]:
+                    readable_type = "date"
+                elif dtype == "USER-DEFINED":
+                    readable_type = "custom type"
+                else:
+                    readable_type = dtype
+
+                line = f"- {col}: {readable_type}"
+                if col in pk_columns:
+                    line += " (Primary Key)"
+                if col in fk_map:
+                    line += f" (Foreign Key to {fk_map[col]})"
+                if nullable == "NO":
+                    line += ", required"
+                schema_output.append(line)
+
+            # Add sample rows
+            cur.execute(f"SELECT * FROM {table} LIMIT 2")
+            sample_rows = cur.fetchall()
+            col_names = [col[0] for col in columns]
+
+            schema_output.append("Sample rows:")
+            for row in sample_rows:
+                row_str = []
+                for val in row:
+                    if isinstance(val, str):
+                        truncated = val[:15] + "..." if len(val) > 15 else val
+                    elif isinstance(val, (int, float)):
+                        truncated = str(val)
+                    elif val is None:
+                        truncated = "NULL"
+                    else:
+                        truncated = str(val)[:10] + "..." if len(str(val)) > 10 else str(val)
+                    row_str.append(truncated)
+                schema_output.append("  - " + ", ".join(row_str))
+
+            schema_output.append("")  # blank line for spacing
+
+        return "\n".join(schema_output)
+
+
+    def execute_query1(self, sql_query = "SELECT * FROM employees1 LIMIT 5;"):
         try:
             self.postgres_cursor.execute(sql_query)
 
@@ -90,18 +196,78 @@ class QueryManager:
 
             from tabulate import tabulate
             formatted_output = tabulate(rows, headers=column_names, tablefmt="github")
-            print(formatted_output.strip())
+            return formatted_output.strip()
 
         except Exception as e:
-            print(f"Error type: {type(e).__name__}")
-            print(f"Error message: {e}")
+            return f"Error type: {type(e).__name__}, Error message: {e}"
 
-    def gen_template(self, text):
-        prompt = self.query_gen_prompt.format(schema = self.schema, text = text)
+    def execute_query(self, sql_query="SELECT * FROM employees1 LIMIT 5;"):
+        try:
+            self.postgres_cursor.execute(sql_query)
+
+            column_names = [desc[0] for desc in self.postgres_cursor.description]
+            rows = self.postgres_cursor.fetchall()
+
+            from tabulate import tabulate
+
+            max_display_rows = 15
+            total_rows = len(rows)
+
+            # Save full output
+            full_output = tabulate(rows, headers=column_names, tablefmt="github")
+            with open(self.output_file, "w") as f:
+                f.write(full_output)
+
+            # Trimmed output for display
+            trimmed_rows = rows[:max_display_rows]
+            display_output = tabulate(trimmed_rows, headers=column_names, tablefmt="github").strip()
+
+            if total_rows > max_display_rows:
+                display_output += f"\n\nNote: Showing {max_display_rows} of {total_rows} rows.\nComplete output saved to {self.output_file}"
+            else:
+                display_output += f"\n\nComplete output saved to {self.output_file}"
+            return display_output
+
+        except Exception as e:
+            return f"Error type: {type(e).__name__}, Error message: {e}"
+
+
+
+    def build_prompt(self, text):
+        prompt = self.query_gen_prompt123.format(schema = self.schema, text = text)
         print(prompt)
         return prompt
 
-    def gen_query(self, prompt):
+    def extract_query(self, text: str) -> str:
+        """
+        Extracts the last SQL query from a code block marked with ```sql ... ```
+        Returns the SQL query as a string or a message if no block is found.
+        """
+        pattern = r"```sql\s+(.*?)```"
+        matches = re.findall(pattern, text, re.DOTALL)
+
+        if not matches:
+            return "No SQL block found", False
+        
+        return matches[-1].strip(), True
+
+    async def gen_query_from_llm(self, prompt):
+        output = await AioHTTPSessionManager.non_stream_response(payload={"prompt": prompt})
+        print(output)
+        return output
+
+
+    async def pipeline(self, query):
+        prompt = self.build_prompt(text = query)
+        
+        llm_output, status = await self.gen_query_from_llm(prompt=prompt)
+        if status:
+            query, status = self.extract_query(text=llm_output)
+            if status:
+                output = self.execute_query(sql_query = query)
+                return output
+        else:
+            return llm_output
         pass
 
     def destroy(self):
@@ -162,7 +328,7 @@ Use Common Table Expressions (CTEs) when needed for readability and performance.
 
 Schema Format:
 - TableName (Row count)
-  - column_name: data_type [PK|FK → referenced_table.column], [NOT NULL]
+  - column_name: data_type, (Primary Key) (Foreign Key to [referenced_table.column]), [required]
 
 Instructions:
 - Think aloud step by step and genertate.
@@ -180,6 +346,83 @@ SELECT 'Unable to generate query: entity not found in schema.' AS message;
 {schema}
 
 ## Query Request
+{text}
+<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+"""
+
+
+    query_gen_prompt = """
+<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+You are a professional PostgreSQL expert who generates optimized, correct SQL queries from natural language questions based on the schema provided. 
+
+Think step by step only when the query is complex (e.g., involves joins, aggregation, subqueries, or CTEs). For simple queries, go straight to generating the query efficiently.
+
+Use Common Table Expressions (CTEs) when needed for readability and performance. Always use explicit JOINs.
+
+Schema Format:
+- TableName (Row count)
+  - column_name: data_type [PK|FK → referenced_table.column], [NOT NULL]
+
+Instructions:
+- Analyze the request and schema carefully.
+- If any entity or field mentioned in the request is not found in the schema, return a small message to the user about the issue.
+- Otherwise, return the final SQL query wrapped in a single SQL code block.
+- Do not include any explanation or text after the SQL block. The SQL code block must be the last thing in the output.
+- And at the after of the code block return `:::` tag
+<|eot_id|><|start_header_id|>user<|end_header_id|>
+## Schema
+{schema}
+
+## Query Request
+{text}
+<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+"""
+
+    query_gen_prompt = """
+<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+You are a professional PostgreSQL expert who generates optimized, correct SQL queries from natural language questions based on the schema provided.
+
+Think step by step only when the query is complex (e.g., involves joins, aggregation, subqueries, or CTEs). For simple queries, go straight to generating the query efficiently.
+
+Use Common Table Expressions (CTEs) when needed for readability and performance. Always use explicit JOINs.
+
+Schema Format:
+- TableName (Row count)
+  - column_name: data_type [PK|FK → referenced_table.column], [NOT NULL]
+
+Instructions:
+- Analyze the request and schema carefully.
+- If any entity or field mentioned in the request is not found in the schema, return a small message to the user about the issue.
+- Otherwise, return the final SQL query wrapped in a single SQL code block.
+- Do not include any explanation or text after the SQL block. The SQL code block must be the last thing in the output.
+- After the code block, return the special token `:::`
+<|eot_id|><|start_header_id|>user<|end_header_id|> 
+"""
+
+
+    query_gen_prompt123 = """
+<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+You are a professional PostgreSQL expert who generates optimized, correct SQL queries from natural language questions based on the schema provided.
+
+Schema Format:
+- TableName (Row count)
+  - column_name: data_type, (Primary Key) (Foreign Key to [referenced_table.column]), [required]
+
+### Schema
+{schema}
+
+Instructions:
+- Analyze the request and schema carefully.
+- If any entity or field mentioned in the request is not found in the schema, return a small message to the user about the issue.
+- Think step by step only when the query is complex in a human language (e.g., involves joins, aggregation, subqueries, or CTEs). For simple queries, go straight to generating the query efficiently.
+- Otherwise, return the final SQL query wrapped in a single SQL code block.
+- Use Common Table Expressions (CTEs) when needed for readability and performance. Always use explicit JOINs.
+- When generating queries, **include additional relevant columns** in the SELECT clause beyond the ones strictly required for the answer. This helps provide richer context in the output, which may assist with further explanation or analysis later.
+- After the code block, return the special token `:::`
+<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+
+### Query Request
 {text}
 <|eot_id|><|start_header_id|>assistant<|end_header_id|>
 """
