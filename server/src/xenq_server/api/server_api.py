@@ -10,7 +10,10 @@ from xenq_server.components.query.history_store import HistoryStore
 from xenq_server.api import AioHTTPSessionManager
 from xenq_server.components.tool_invoker_json import ToolInvoker
 
-FLASK_BACKEND_URL = "http://localhost:5005"
+import os
+
+from xenq_server.config import AGENT_URI
+
 from typing import Optional
 
 # @cl.password_auth_callback
@@ -24,14 +27,16 @@ from typing import Optional
 #     else:
 #         return None
 
-tool_invoker = ToolInvoker()
-tool_invoker.update_sql_uri("postgresql://admin:admin123@localhost:5432/college")
-
 async def start(*args):
     await cl.ChatSettings(widgets).send()
     await cl.context.emitter.set_commands(commands)
     cl.user_session.set("history", HistoryStore())
     cl.user_session.set("temperature", 0.8)
+    cl.user_session.set("psql_uri", "")
+    tool_invoker = ToolInvoker()
+    await tool_invoker.setup("/teamspace/studios/this_studio/dickens")
+    tool_invoker.update_sql_uri("postgresql://admin:admin123@localhost:5432/college") 
+    cl.user_session.set("tool_invoker", tool_invoker)
 
 
 async def update_settings(settings):
@@ -48,11 +53,12 @@ async def stream_response(payload: dict, msg=None):
         msg = cl.Message(content="")
         await msg.send()
 
-    url = f"{FLASK_BACKEND_URL}/stream"
+    url = f"{AGENT_URI}/stream"
     response = ""
     hide = False
     hidden = ""
     visible = ""
+    token=""
 
     tag_buffer = ""
     buffer_limit = 20  # Look back over the last N characters to detect tag boundaries
@@ -68,33 +74,12 @@ async def stream_response(payload: dict, msg=None):
                         data = json.loads(decoded[5:])
                         token = data.get("token", "")
                         response += token
-
-                        tag_buffer += token
-                        tag_buffer = tag_buffer[-buffer_limit:]  # Keep last N characters
-
-                        if "<internal>" in tag_buffer:
-                            hide = True
-                            tag_buffer = ""  # Clear after trigger
-                            continue  # Skip this token
-
-                        if "</internal>" in tag_buffer:
-                            hide = False
-                            tag_buffer = ""  # Clear after trigger
-                            continue  # Skip this token
-
-                        if hide:
-                            hidden += token
-                        else:
-                            visible += token
-                            await msg.stream_token(token)
+                        await msg.stream_token(token)
 
                     except Exception as e:
                         print("Streaming error:", e)
     except Exception as e:
         print("Request failed:", e)
-
-    print("hidden: ", hidden)
-    print("visible: ", visible)
 
     return {
         "token": token,
@@ -112,7 +97,7 @@ async def stream_response1(payload: dict, msg=None):
         msg = cl.Message(content="")
         await msg.send()
 
-    url = f"{FLASK_BACKEND_URL}/stream"
+    url = f"{AGENT_URI}/stream"
     response = ""
     hide = False
     hidden=""
@@ -168,6 +153,7 @@ async def on_message(message: cl.Message):
         return
 
     prompt = hist.build_prompt()
+    print(prompt)
 
     if message.command != "stream":
         response = await stream_response({"prompt": prompt, "command": message.command})
@@ -178,15 +164,22 @@ async def on_message(message: cl.Message):
             retry_count += 1
             # Check if response ends with '</tool>​' to decide on tool use
             if "</tool>" in  response.get("response", "")[-10:]:
-                output = await tool_invoker.pipeline(response.get("response"))
-                hist.append_content("backend", output)
-                prompt = hist.build_prompt()
-                # Reset internal reasoning before the next call
-                response = await stream_response({
-                    "prompt": prompt,
-                    "command": message.command
-                }, response.get("msg"))
-
+                tool_invoker = cl.user_session.get("tool_invoker", ToolInvoker())
+                output, llm_responses = await tool_invoker.pipeline(response.get("response"))
+                for llm_response in llm_responses:
+                    hist.append_content("light_rag", llm_response)
+                if output:
+                    print("output: ", output)
+                    hist.append_content("backend", output)
+                    prompt = hist.build_prompt()
+                    # Reset internal reasoning before the next call
+                    response = await stream_response({
+                        "prompt": prompt,
+                        "command": message.command
+                    }, response.get("msg"))
+                else:
+                    await response.get("msg").update() 
+                    break
             else:
                 await response.get("msg").update() 
                 break  # No tool use trigger, break the loop
@@ -199,7 +192,7 @@ async def on_message(message: cl.Message):
         })
 
 async def non_stream_response(payload: dict):
-    url = f"{FLASK_BACKEND_URL}/prompt"
+    url = f"{AGENT_URI}/prompt"
     session = await AioHTTPSessionManager.get_session()
     
     try:

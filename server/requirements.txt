@@ -5,3 +5,4 @@ psycopg2-binary
 tabulate
 duckduckgo-search
 -e .
+-e ./src/xenq_server/components/LightRAG

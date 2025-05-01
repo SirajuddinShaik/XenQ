@@ -9,7 +9,7 @@ from torch.cuda import temperature
 from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
 import torch
 from transformers.models.auto.tokenization_auto import AutoTokenizer
-from transformers.models.auto.modeling_auto import  AutoModelForSeq2SeqLM
+from transformers.models.auto.modeling_auto import  AutoModelForSeq2SeqLM, AutoModel
 from functools import lru_cache
 
 temp_output = """Let me think this through for you…
@@ -117,18 +117,18 @@ async def chat(request: Request):
         return {"error": "Missing prompt"}
 
     async def event_stream():
-        async for token in generate_fake_tokens(prompt, user_id, temperature):
+        async for token in generate_token_stream(prompt, user_id, temperature):
             yield token
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
     
-async def generate_output(prompt: str, user_id: str, temperature):
+async def generate_output(prompt: str, user_id: str, temperature, mode="None"):
     engine_instance = get_engine()
     params = SamplingParams(
         top_p=0.9,
         temperature=temperature,
         max_tokens=2000,
-        stop=["<|eot_id|>", ":::", "</tool>"],
+        stop=["<|eot_id|>", ":::", "</tool>", "}" if mode == "extract" else "</tool>"],
         include_stop_str_in_output = True,
     )
 
@@ -154,10 +154,11 @@ async def gen_from_prompt(request: Request):
     # prompt = request.query_params.get("prompt","str")
     body = await request.json()
     prompt = body.get("prompt", "")
-    # print(prompt)
+    mode = body.get("mode", "None")
     temperature = request.query_params.get("temperature",0.7)
     # print(temperature)
-    output = await generate_output(prompt, "params",temperature=float(temperature))
+    
+    output = await generate_output(prompt, str(uuid4()),temperature=float(temperature), mode=mode)
     
     return {"output":output, "status":200}
 
@@ -236,6 +237,36 @@ async def gen_summary(request: Request):
     del attention_mask
     return {"output": summaries, "status": 200}
 
+EMBED_MODEL = "sentence-transformers/all-mpnet-base-v2"
+
+@lru_cache(maxsize=1)
+def get_embedding_model():
+    tokenizer = AutoTokenizer.from_pretrained(EMBED_MODEL)
+    model = AutoModel.from_pretrained(EMBED_MODEL)
+    return tokenizer, model
+
+def compute_embedding(texts):
+    tokenizer, model = get_embedding_model()
+    inputs = tokenizer(texts, padding=True, truncation=True, return_tensors="pt")
+    with torch.no_grad():
+        model_output = model(**inputs)
+    embeddings = model_output.last_hidden_state.mean(dim=1)
+    return embeddings.numpy().tolist()
+
+@app.post("/embed")
+async def embed_route(request: Request):
+    body = await request.json()
+    texts = body.get("texts", [])
+    if not texts:
+        print("NO tests")
+        return {"error": "Missing texts"}, 400
+    try:
+        embeddings = compute_embedding(texts)
+        return {"embeddings": embeddings}, 200
+    except Exception as e:
+        print(e)
+        return {"error": str(e)}, 500
 
 # engine = get_engine()
 # get_summarizer()
+get_embedding_model()

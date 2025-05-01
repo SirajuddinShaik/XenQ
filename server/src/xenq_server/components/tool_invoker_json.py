@@ -3,6 +3,7 @@ import re
 import random
 from xenq_server.components.web_query import WebQuery
 from xenq_server.components.query import QueryManager
+from xenq_server.components.LightRAG import LightRag
 
 class ToolInvoker:
     def __init__(self):
@@ -12,10 +13,13 @@ class ToolInvoker:
             "search_web": self.search_web,
             "database_query":self.sql_query ,
             "execute_python":self.none,
-            "get_weather": self.none,
+            "knowledge_query": self.knowledge_query,
             "create_file": self.none
         }
+        self.light_rag = LightRag()
     
+    async def setup(self, WORKING_DIR = "./dickens"):
+        await self.light_rag.setup(WORKING_DIR)
 
     def extract_tool_invocation(self, llm_output):
         # Find all <tool>...</tool> blocks (regardless of format inside)
@@ -44,7 +48,6 @@ class ToolInvoker:
                 print(f"Error decoding JSON block {i+1}: {e}")
 
         if result:
-            print(result)
             return { "function_calls": result }
         else:
             print("No valid tool blocks found.")
@@ -66,15 +69,19 @@ class ToolInvoker:
         if query_manager.get_status():
             self.query_manager = query_manager
 
+    async def knowledge_query(self,query):
+        if self.light_rag is None:
+            return "No File Found"
+        output = await self.light_rag.pipeline(query=query)
+        return output
+
     async def pipeline(self, internal_text):
-        print("text",internal_text)
         try:
             tool_dict = self.extract_tool_invocation(internal_text)  # List of dicts
             print("tool_dicts", tool_dict)
         except Exception as e:
             return {"error": f"Failed to extract tool invocation: {e}"}
 
-        outputs = []
         seen_calls = set()  # To store (func_name, parameters_as_str) tuples for uniqueness
 
         for function in tool_dict["function_calls"]:
@@ -92,12 +99,11 @@ class ToolInvoker:
                     try:
                         result = await self.functions[func_name](**parameters)
                         function["output"] = result
-                        outputs.append(result)
                     except Exception as e:
-                        outputs.append(f"Function `{func_name}` failed: {e}")
+                        function["output"] = f"Function `{func_name}` failed: {e}"
                 else:
-                    outputs.append(f"Unknown function: {func_name}")
-        return self.format_output(outputs)
+                    function["output"] = f"Unknown function: {func_name}"
+        return self.format_output(tool_dict["function_calls"])
 
     def format_output(self, outputs):
         """
@@ -107,14 +113,18 @@ class ToolInvoker:
             return "\n### Output From Backend\n\n- No results found."
 
         formatted = "\n### Output From Backend\n\n"
+        responses = []
         for idx, item in enumerate(outputs, start=1):
-            if isinstance(item, dict):
-                item_str = ", ".join(f"{k}: {v}" for k, v in item.items())
+            if item.get("name") == "knowledge_query":
+                responses.append(item.get("output"))
+            elif isinstance(item["output"], dict):
+                item_str = ", ".join(f"{k}: {v}" for k, v in item["output"].items())
+                formatted += f"{idx}. {item_str}\n"
             else:
-                item_str = str(item)
-            formatted += f"{idx}. {item_str}\n"
+                item_str = str(item["output"])
+                formatted += f"{idx}. {item_str}\n"
 
-        return formatted
+        return formatted if len(responses)!=len(outputs) else "", responses
 
     async def none(self, **kwargs):
         return "Just Testing the llm Asume Something! the function is not Implement yet..."

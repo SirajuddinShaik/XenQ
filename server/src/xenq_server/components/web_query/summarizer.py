@@ -3,15 +3,16 @@ import aiohttp
 import json
 import random
 
+import os
 
-FLASK_BACKEND_URL = "http://localhost:5005"
+from xenq_server.config import AGENT_URI
 
+print(AGENT_URI)
 
 # summarizer.py
 import json
 from xenq_server.api import AioHTTPSessionManager
 
-FLASK_BACKEND_URL = "http://localhost:5005"
 
 class Summarizer:
     def __init__(self, chunk_size=1000):
@@ -35,7 +36,7 @@ class Summarizer:
         return chunk_summaries
 
     async def generate(self, content, query):
-        url = f"{FLASK_BACKEND_URL}/summarize"
+        url = f"{AGENT_URI}/summarize"
         session = await AioHTTPSessionManager.get_session()
         async with session.post(url, json={"data": {"content": content}, "query": query}) as resp:
             if resp.status == 200:

@@ -1,7 +1,10 @@
 # __init__.py for server/src/xenq_server/api/__init__.py
 # session_manager.py
 import aiohttp
-FLASK_BACKEND_URL = "http://localhost:5005"
+import os
+
+from xenq_server.config import AGENT_URI
+
 
 class AioHTTPSessionManager:
     _session: aiohttp.ClientSession = None
@@ -18,8 +21,8 @@ class AioHTTPSessionManager:
             await cls._session.close()
 
     @classmethod
-    async def non_stream_response(cls, payload: dict):
-        url = f"{FLASK_BACKEND_URL}/prompt"
+    async def non_stream_response(cls, payload: dict) -> str:
+        url = f"{AGENT_URI}/prompt"
         session = await cls.get_session()
         
         try:

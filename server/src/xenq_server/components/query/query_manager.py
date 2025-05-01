@@ -14,6 +14,7 @@ class QueryManager:
             self.schema = self.get_llm_friendly_schema(self.postgres_cursor)
             self.conn_status = True
             self.output_file = "./output.txt"
+            print("Connected!")
         except Exception as e:
             self.conn_status = False
         
@@ -186,6 +187,9 @@ class QueryManager:
 
         return "\n".join(schema_output)
 
+    def reset_curr(self):
+        self.postgres_cursor.close()
+        self.postgres_cursor = self.conn.cursor()
 
     def execute_query1(self, sql_query = "SELECT * FROM employees1 LIMIT 5;"):
         try:
@@ -223,19 +227,19 @@ class QueryManager:
             display_output = tabulate(trimmed_rows, headers=column_names, tablefmt="github").strip()
 
             if total_rows > max_display_rows:
-                display_output += f"\n\nNote: Showing {max_display_rows} of {total_rows} rows.\nComplete output saved to {self.output_file}"
+                display_output += f"\n\nNote: Showing {max_display_rows} of total count: {total_rows} rows.\nComplete output saved to {self.output_file}.\nYou can only use this data to process.You can tell user to view the file if necessary."
             else:
                 display_output += f"\n\nComplete output saved to {self.output_file}"
             return display_output
 
-        except Exception as e:
+        except Exception as e:  
+            self.conn.rollback()
             return f"Error type: {type(e).__name__}, Error message: {e}"
 
 
 
     def build_prompt(self, text):
         prompt = self.query_gen_prompt123.format(schema = self.schema, text = text)
-        print(prompt)
         return prompt
 
     def extract_query(self, text: str) -> str:
@@ -253,14 +257,13 @@ class QueryManager:
 
     async def gen_query_from_llm(self, prompt):
         output = await AioHTTPSessionManager.non_stream_response(payload={"prompt": prompt})
-        print(output)
         return output
 
 
     async def pipeline(self, query):
         prompt = self.build_prompt(text = query)
-        
         llm_output, status = await self.gen_query_from_llm(prompt=prompt)
+        print(llm_output)
         if status:
             query, status = self.extract_query(text=llm_output)
             if status:
@@ -268,7 +271,6 @@ class QueryManager:
                 return output
         else:
             return llm_output
-        pass
 
     def destroy(self):
         self.postgres_cursor.close()
