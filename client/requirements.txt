@@ -1,2 +1,5 @@
 # requirements.txt for client/requirements.txt
+fastapi
+uvicorn
+pydantic
 -e .

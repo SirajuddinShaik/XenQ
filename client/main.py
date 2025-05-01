@@ -1,70 +1,10 @@
 # main.py for client/main.py
-from flask import Flask, jsonify, request
+# client_api.py for client/src/xenq_client/api/client_api.py
+from fastapi import FastAPI
+from xenq_client.components import system_manager_router, file_service_router
 
-from xenq_client.components.python_executor import PythonExecutor
-py_executor = PythonExecutor()
+app = FastAPI()
 
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Welcome to the Simple Flask App!"
-
-@app.route('/api/data')
-def get_data():
-    return jsonify({"message": "Hello from Flask API!", "status": "success"})
-
-
-@app.route('/api/execute_code', methods=['POST'])
-def execute_command():
-    code = request.json.get('code')
-    # code = request.data.decode("utf-8")
-    print(code)
-    try:
-        result = py_executor.execute_code(code)
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-    
-@app.route('/api/edit_file', methods=['POST'])
-def edit_file():
-    file_path = request.json.get('file_path')
-    content = request.json.get('content')
-    try:
-        result = py_executor.edit_file(file_path, content)
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/read_file', methods=['POST'])
-def read_file():
-    file_path = request.json.get('file_path')
-    try:
-        result = py_executor.read_file(file_path)
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/delete_file', methods=['POST'])
-def delete_file():
-    file_path = request.json.get('file_path')
-    try:
-        result = py_executor.delete_file(file_path)
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/upload_file', methods=['POST'])
-def upload_to_server():
-    file_path = request.json.get('file_path')
-    print(file_path)
-    try:
-        result = py_executor.upload_file(file_path)
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
-    
-
-
-if __name__ == '__main__':
-    app.run(debug=True)
+# Attach router
+app.include_router(system_manager_router)
+app.include_router(file_service_router)
