@@ -105,7 +105,7 @@ Action:
       "parameters": {
         "query": {
           "type": "string",
-          "description": "Search phrase."
+          "description": "A clear and detailed search query describing exactly what information you are looking for."
         }
       },
       "returns": "Search results with summaries and links."

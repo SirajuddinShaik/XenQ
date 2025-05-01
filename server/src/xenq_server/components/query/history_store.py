@@ -74,6 +74,7 @@ class HistoryStore:
         "memory": "### Memory\n- {content.join('\n- ')}",
         "table": "#### Query: {query}\nOutput:\n{table}",
         "light_rag": "</internal><|start_header_id|>rag<|end_header_id|>\n{content}<|eot_id|>",
+        "web_whisper": "</internal><|start_header_id|>WebWhisper<|end_header_id|>\n{content}<|eot_id|>",
         "backend": "</internal><|start_header_id|>backend<|end_header_id|>\n{content}\n\n- If the backend fails, retry 2–3 times; since internal blocks are hidden, explain the result naturally as if you figured it out, and if all retries fail, inform the user with a clear, friendly explanation of the error.<|eot_id|><|start_header_id|>assistant<|end_header_id|>",
         "web_query": ""
     }

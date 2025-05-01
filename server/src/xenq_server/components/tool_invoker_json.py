@@ -115,7 +115,7 @@ class ToolInvoker:
         formatted = "\n### Output From Backend\n\n"
         responses = []
         for idx, item in enumerate(outputs, start=1):
-            if item.get("name") == "knowledge_query":
+            if item.get("name") in ["knowledge_query", "search_web"]:
                 responses.append(item.get("output"))
             elif isinstance(item["output"], dict):
                 item_str = ", ".join(f"{k}: {v}" for k, v in item["output"].items())

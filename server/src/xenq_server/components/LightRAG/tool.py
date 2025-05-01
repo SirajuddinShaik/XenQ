@@ -71,7 +71,7 @@ class LightRag:
                 print(f"Naive mode also failed with error: {e2}")
                 prompt = "No context found due to error in backend"
 
-        prompt = system_prompt.format(user_query=query,context_chunks=context)
+        prompt = rag_sys_prompt.format(user_query=query,context_chunks=context)
         # print("Prompt:", prompt)
 
 
@@ -81,7 +81,7 @@ class LightRag:
             "Content-Type": "application/json"
         }
         response=""
-        msg = cl.Message("")
+        msg = cl.Message(content = "", author="light_rag")
         try:
             async with session.post(f"{AGENT_URI}/stream", headers=headers, json={"prompt": prompt}) as resp:
                 async for line in resp.content:
@@ -97,10 +97,10 @@ class LightRag:
                             print("Streaming error:", e)
         except Exception as e:
             print("Request failed:", e)
-        
-        return response
+        await msg.update()
+        return {"role": "light_rag", "content": response}
 
-system_prompt = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+rag_sys_prompt = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
 You are a knowledgeable assistant powered by a Graph-based Retrieval-Augmented Generation (RAG) system.  
 Your job is to answer the user's question by retrieving and summarizing relevant content from their personal documents and knowledge graph.

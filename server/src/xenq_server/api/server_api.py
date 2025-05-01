@@ -50,7 +50,7 @@ async def stream_response(payload: dict, msg=None):
     }
 
     if msg is None:
-        msg = cl.Message(content="")
+        msg = cl.Message(content="", author="xenq")
         await msg.send()
 
     url = f"{AGENT_URI}/stream"
@@ -94,7 +94,7 @@ async def stream_response1(payload: dict, msg=None):
     }
 
     if msg is None:
-        msg = cl.Message(content="")
+        msg = cl.Message(content="", author="xenq")
         await msg.send()
 
     url = f"{AGENT_URI}/stream"
@@ -149,7 +149,7 @@ async def on_message(message: cl.Message):
 
     status = hist.append_content(role="user", content=message.content)
     if not status:
-        await cl.Message(content="The message length is too big 💪!").send()
+        await cl.Message(content="The message length is too big 💪!", author="xenq").send()
         return
 
     prompt = hist.build_prompt()
@@ -167,7 +167,7 @@ async def on_message(message: cl.Message):
                 tool_invoker = cl.user_session.get("tool_invoker", ToolInvoker())
                 output, llm_responses = await tool_invoker.pipeline(response.get("response"))
                 for llm_response in llm_responses:
-                    hist.append_content("light_rag", llm_response)
+                    hist.append_content(llm_response["role"], llm_response["content"])
                 if output:
                     print("output: ", output)
                     hist.append_content("backend", output)
@@ -200,7 +200,7 @@ async def non_stream_response(payload: dict):
             if resp.status == 200:
                 data = await resp.json()
                 output_text = data.get("output", "no response")
-                await cl.Message(content=output_text).send()  # Or use msg.update if applicable
+                await cl.Message(content=output_text, author="xenq").send()  # Or use msg.update if applicable
             else:
                 await cl.Message(content=f"Request failed with status {resp.status}").send()
     except Exception as e:

@@ -3,6 +3,7 @@
 import psycopg2
 import re
 from xenq_server.api import AioHTTPSessionManager
+import chainlit as cl
 
 class QueryManager:
 
@@ -205,7 +206,7 @@ class QueryManager:
         except Exception as e:
             return f"Error type: {type(e).__name__}, Error message: {e}"
 
-    def execute_query(self, sql_query="SELECT * FROM employees1 LIMIT 5;"):
+    async def execute_query(self, sql_query="SELECT * FROM employees1 LIMIT 5;"):
         try:
             self.postgres_cursor.execute(sql_query)
 
@@ -230,7 +231,8 @@ class QueryManager:
                 display_output += f"\n\nNote: Showing {max_display_rows} of total count: {total_rows} rows.\nComplete output saved to {self.output_file}.\nYou can only use this data to process.You can tell user to view the file if necessary."
             else:
                 display_output += f"\n\nComplete output saved to {self.output_file}"
-            return display_output
+                await cl.Message(display_output, author = "database").send()
+            return display_output+"\n\nThe table is visible to user you can just continue the swag summarize if nessary."
 
         except Exception as e:  
             self.conn.rollback()
@@ -267,7 +269,7 @@ class QueryManager:
         if status:
             query, status = self.extract_query(text=llm_output)
             if status:
-                output = self.execute_query(sql_query = query)
+                output = await self.execute_query(sql_query = query)
                 return output
         else:
             return llm_output

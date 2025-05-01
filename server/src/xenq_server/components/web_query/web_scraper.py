@@ -14,7 +14,7 @@ class WebsiteScraper:
             return response.text
         except requests.exceptions.RequestException as e:
             print(f"[ERROR] Failed to scrape {url}: {e}")
-            return None
+            return "None"
 
     @staticmethod
     def clean_html(raw_html: str) -> str:
@@ -74,14 +74,14 @@ class WebsiteScraper:
         return content
 
     @staticmethod
-    def run_pipeline(url: str, structured: bool = False):
+    def run_pipeline(url: str, structured: bool = False) -> str:
         """Run the full scraping and processing pipeline."""
         raw_html = WebsiteScraper.scrape(url)
         if not raw_html:
-            return None, None
+            return ""
 
         cleaned = WebsiteScraper.clean_html(raw_html)
         preprocessed = WebsiteScraper.preprocess_text(cleaned)
-        structured_content = WebsiteScraper.structure_content(raw_html) if structured else None
+        # structured_content = WebsiteScraper.structure_content(raw_html) if structured else None
 
-        return structured_content, preprocessed
+        return preprocessed
