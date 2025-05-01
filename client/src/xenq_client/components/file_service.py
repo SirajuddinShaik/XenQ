@@ -6,8 +6,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 router = APIRouter(
-    prefix="/   ",
-    tags=["System Manager"]
+    prefix="/file_service",
+    tags=["File Service"]
 )
 UPLOAD_FOLDER = "uploaded_files"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)

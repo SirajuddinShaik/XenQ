@@ -5,7 +5,8 @@ import platform
 from tabulate import tabulate
 import socket
 from collections import defaultdict
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 
 # Create the router
 router = APIRouter(
@@ -44,7 +45,8 @@ def get_system_info():
     system_info.append(["Machine", uname.machine])
     system_info.append(["Processor", uname.processor])
 
-    return tabulate(system_info, headers=["Component", "Details"], tablefmt="github")
+    table =  tabulate(system_info, headers=["Component", "Details"], tablefmt="github")
+    return {"response": table, "success": True}
 
 
 # List of known internal Windows processes to exclude
@@ -111,10 +113,19 @@ def list_user_processes():
     rows.sort(key=lambda x: x[2], reverse=True)
     # Display results in a table
     column_names = ["Name", "Instance Count", "RAM Usage (MB)", "Ports"]
-    return tabulate(rows, headers=column_names, tablefmt="github")
+    table =  tabulate(rows, headers=column_names, tablefmt="github")
+    return {"response": table, "success": True}
+
+class KillProcessRequest(BaseModel):
+    name: str = None
+    port: int = None    
 
 @router.post("/kill_process")
-def kill_processes_by_name_or_port(name=None, port=None):
+async def kill_processes_by_name_or_port(request: Request):
+    body = await request.json()
+    name = body.get("name", None)
+    port = body.get("port", None)
+    print(name, port)
     killed_pids = []
 
     for proc in psutil.process_iter(['pid', 'name']):
@@ -139,6 +150,7 @@ def kill_processes_by_name_or_port(name=None, port=None):
             continue
 
     if killed_pids:
-        print(f"Killed processes with PIDs: {killed_pids}")
+        msg = f"Killed processes with PIDs: {killed_pids}"
     else:
-        print("No matching processes found.")
+        msg = "No matching processes found."
+    return {"response": msg, "success": True}
