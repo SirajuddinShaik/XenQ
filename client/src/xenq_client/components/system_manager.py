@@ -1,11 +1,13 @@
 # system_manager.py for client/src/xenq_client/components/system_manager.py
 
+import asyncio
+from fastapi.responses import StreamingResponse
 import psutil
 import platform
 from tabulate import tabulate
-import socket
+import subprocess
 from collections import defaultdict
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 # Create the router
@@ -14,7 +16,9 @@ router = APIRouter(
     tags=["System Manager"]
 )
 
-@router.get("/details")
+SHARED_FOLDER = "../xenq_shared_folder"
+
+@router.get("/get_config")
 def get_system_info():
     system_info = []
     # OS Info
@@ -154,3 +158,44 @@ async def kill_processes_by_name_or_port(request: Request):
     else:
         msg = "No matching processes found."
     return {"response": msg, "success": True}
+
+@router.post("/run_command")
+async def start_process(request: Request):
+    body = await request.json()
+    command = body.get("command")
+    stream = body.get("stream", False)
+
+    if not command:
+        return {"response": "No command provided.", "success": False}
+
+    try:
+        if not stream:
+            # Normal mode: just start the process without streaming
+            process = subprocess.Popen(command, shell=True, cwd=SHARED_FOLDER)
+            return {"response": f"Process started with PID {process.pid}", "success": True}
+        else:
+            # Stream mode: stream stdout line-by-line
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                shell=True,
+                text=True,
+                cwd=SHARED_FOLDER
+            )
+
+            async def stream_output():
+                try:
+                    while True:
+                        line = await asyncio.to_thread(process.stdout.readline)
+                        if not line:
+                            break
+                        yield line.rstrip() + "\n"
+                finally:
+                    process.terminate()
+                    await asyncio.to_thread(process.wait)
+
+            return StreamingResponse(stream_output(), media_type="text/plain")
+
+    except Exception as e:
+        return {"response": f"Error starting process: {str(e)}", "success": False}

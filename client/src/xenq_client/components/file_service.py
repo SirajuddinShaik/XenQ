@@ -1,81 +1,165 @@
-# python_executor.py for client/src/xenq_client/components/python_executor.py
 import os
-import mimetypes
-from fastapi import  UploadFile, File, HTTPException, APIRouter
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from fastapi import UploadFile, File, APIRouter, Request
 
 router = APIRouter(
     prefix="/file_service",
     tags=["File Service"]
 )
-UPLOAD_FOLDER = "uploaded_files"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-class CodeSnippet(BaseModel):
-    code: str
+SHARED_FOLDER = "../xenq_shared_folder"
+os.makedirs(SHARED_FOLDER, exist_ok=True)
+
+def secure_path(file_name: str) -> str:
+    """Prevent path traversal, always save inside SHARED_FOLDER."""
+    file_name = os.path.basename(file_name)
+    return os.path.join(SHARED_FOLDER, file_name)
 
 @router.post("/execute")
-async def execute_code(snippet: CodeSnippet):
+async def execute_code(request: Request):
     try:
+        body = await request.json()
+        code = body.get("code", "")
+        
         import sys
         import io
 
         old_stdout = sys.stdout
         redirected_output = sys.stdout = io.StringIO()
 
-        exec(snippet.code)
+        exec(code)
 
         sys.stdout = old_stdout
         output = redirected_output.getvalue()
 
-        return {"status": "success", "output": output}
+        return {"status": True, "output": output}
     except Exception as e:
         sys.stdout = old_stdout
-        return {"status": "error", "message": str(e)}
+        return {"status": False, "response": str(e)}
 
-@router.get("/read_file")
-async def read_file(file_path: str):
+@router.post("/create_file")
+async def create_file(request: Request):
     try:
-        with open(file_path, 'r') as file:
-            data = file.read()
-        return {"status": "success", "data": data}
+        body = await request.json()
+        file_name = body.get("file_name")
+        content = body.get("content", "")
+
+        if not file_name:
+            return {"status": False, "response": "file_name is required."}
+
+        file_path = secure_path(file_name)
+
+        if os.path.exists(file_path):
+            return {"status": False, "response": f"File '{file_name}' already exists."}
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        return {"status": True, "response": f"File '{file_name}' created successfully."}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"status": False, "response": str(e)}
 
-@router.delete("/delete_file")
-async def delete_file(file_path: str):
+@router.post("/write_file")
+async def write_file(request: Request):
     try:
+        body = await request.json()
+        file_name = body.get("file_name")
+        content = body.get("content", "")
+        mode = body.get("mode", "overwrite")  # default is overwrite, can be "append"
+
+        if not file_name:
+            return {"status": False, "response": "file_name is required."}
+
+        file_path = secure_path(file_name)
+
+        if not os.path.exists(file_path):
+            return {"status": False, "response": f"File '{file_name}' does not exist."}
+
+        if mode == "append":
+            file_mode = "a"  # append mode
+        else:
+            file_mode = "w"  # overwrite mode
+
+        with open(file_path, file_mode, encoding="utf-8") as f:
+            f.write(content)
+
+        action = "appended to" if mode == "append" else "overwritten"
+        return {"status": True, "response": f"Content successfully {action} '{file_name}'."}
+
+    except Exception as e:
+        return {"status": False, "response": str(e)}
+        
+@router.post("/read_file")
+async def read_file(request: Request):
+    try:
+        body = await request.json()
+        file_name = body.get("file_name")
+        
+        if not file_name:
+            return {"status": False, "response": "file_name is required."}
+
+        file_path = secure_path(file_name)
+
+        if not os.path.exists(file_path):
+            return {"status": False, "response": f"File '{file_name}' not found."}
+
+        with open(file_path, 'r', encoding="utf-8") as file:
+            data = file.read()
+        return {"status": True, "data": data}
+    except Exception as e:
+        return {"status": False, "response": str(e)}
+
+@router.post("/delete_file")
+async def delete_file(request: Request):
+    try:
+        body = await request.json()
+        file_name = body.get("file_name")
+
+        if not file_name:
+            return {"status": False, "response": "file_name is required."}
+
+        file_path = secure_path(file_name)
+
         if os.path.exists(file_path):
             os.remove(file_path)
-            return {"status": "success", "message": f"File {file_path} deleted successfully."}
+            return {"status": True, "response": f"File '{file_name}' deleted successfully."}
         else:
-            raise HTTPException(status_code=404, detail=f"File {file_path} does not exist.")
+            return {"status": False, "response": f"File '{file_name}' does not exist."}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"status": False, "response": str(e)}
 
-@router.get("/download_file")
-async def download_file(file_path: str):
+@router.post("/download_file")
+async def download_file(request: Request):
     try:
-        file_path = os.path.normpath(file_path)
+        body = await request.json()
+        file_name = body.get("file_name")
+
+        if not file_name:
+            return {"status": False, "response": "file_name is required."}
+
+        file_path = secure_path(file_name)
+
         if not os.path.exists(file_path):
-            raise HTTPException(status_code=404, detail="File not found")
-        return FileResponse(
-            path=file_path,
-            media_type=mimetypes.guess_type(file_path)[0] or "application/octet-stream",
-            filename=os.path.basename(file_path),
-        )
+            return {"status": False, "response": "File not found."}
+
+        with open(file_path, "rb") as f:
+            content = f.read()
+
+        return {
+            "status": True,
+            "file_name": file_name,
+            "content": content.decode('latin1')
+        }
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"status": False, "response": str(e)}
 
 @router.post("/upload_file")
 async def upload_file(file: UploadFile = File(...)):
     try:
-        file_location = os.path.join(UPLOAD_FOLDER, str(file.filename))
-        with open(file_location, "wb") as f:
+        file_path = secure_path(file.filename)
+        with open(file_path, "wb") as f:
             content = await file.read()
             f.write(content)
-        
-        return {"status": "success", "filename": file.filename, "saved_to": file_location}
+        return {"status": True, "filename": file.filename, "saved_to": file_path}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"status": False, "response": str(e)}

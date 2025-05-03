@@ -8,12 +8,12 @@ default_system_msg = p9
 class HistoryStore:
     def __init__(self, system_msg = default_system_msg):
         self.system_msg = {"msg": system_msg, "cum_word_len": len(system_msg.split())}
-        self.max_words = 4000
+        self.max_words = 5000
         self.history = []
         self.memory = []
         self.tmp_resoning = ""
     
-    def append_content(self, role, content):
+    def append_content(self, role: str, content: str = ""):
         prev_cum_len = self.history[-1]["cum_word_len"] if self.history else 0
         length = len(content.split())
         if length < 800 or role == "backend":
@@ -73,8 +73,9 @@ class HistoryStore:
         "assistant": "{content}",
         "memory": "### Memory\n- {content.join('\n- ')}",
         "table": "#### Query: {query}\nOutput:\n{table}",
-        "light_rag": "</internal><|start_header_id|>rag<|end_header_id|>\n{content}<|eot_id|>",
-        "web_whisper": "</internal><|start_header_id|>WebWhisper<|end_header_id|>\n{content}<|eot_id|>",
+        "light_rag": "</internal><|eot_id|><|start_header_id|>rag<|end_header_id|>\n{content}<|eot_id|>",
+        "web_whisper": "</internal><|eot_id|><|start_header_id|>WebWhisper<|end_header_id|>\n{content}<|eot_id|>",
         "backend": "</internal><|start_header_id|>backend<|end_header_id|>\n{content}\n\n- If the backend fails, retry 2–3 times; since internal blocks are hidden, explain the result naturally as if you figured it out, and if all retries fail, inform the user with a clear, friendly explanation of the error.<|eot_id|><|start_header_id|>assistant<|end_header_id|>",
-        "web_query": ""
+        "web_query": "",
+        "client": "</internal><|eot_id|><|start_header_id|>remote_controller<|end_header_id|>\n{content}<|eot_id|>"
     }

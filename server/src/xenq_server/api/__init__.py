@@ -1,7 +1,6 @@
 # __init__.py for server/src/xenq_server/api/__init__.py
 # session_manager.py
 import aiohttp
-import os
 
 from xenq_server.config import AGENT_URI
 

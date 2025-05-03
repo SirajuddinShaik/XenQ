@@ -1,11 +1,18 @@
 import json
 import re
-import random
-from xenq_server.components.web_query import WebQuery
-from xenq_server.components.query import QueryManager
-from xenq_server.components.LightRAG import LightRag
+import chainlit as cl
+from xenq_server.components import QueryManager, WebQuery, LightRag, ClientConnect
 
 class ToolInvoker:
+    client_params={
+        "create_file":{"method": "post", "main": "file_service", "sub": "create_file"},
+        "write_file":{"method": "post", "main": "file_service", "sub": "write_file"},
+        "delete_file":{"method": "post", "main": "file_service", "sub": "delete_file"},
+        "kill_process":{"method": "post", "main": "system_manager", "sub": "kill_process"},
+        "get_config":{"method": "get", "main": "system_manager", "sub": "get_config"},
+        "list_process":{"method": "get", "main": "system_manager", "sub": "list_process"},
+        "run_command":{"method": "post", "main": "system_manager", "sub": "run_command"},
+    }
     def __init__(self):
         self.web_query = WebQuery()
         self.query_manager = None
@@ -14,9 +21,10 @@ class ToolInvoker:
             "database_query":self.sql_query ,
             "execute_python":self.none,
             "knowledge_query": self.knowledge_query,
-            "create_file": self.none
+            "remote_controller": self.remote_controller,
         }
         self.light_rag = LightRag()
+        self.client_manager = None
     
     async def setup(self, WORKING_DIR = "./dickens"):
         await self.light_rag.setup(WORKING_DIR)
@@ -60,14 +68,37 @@ class ToolInvoker:
     
     async def sql_query(self, text, **kwargs):
         if self.query_manager is None:
-            return "No Sql url is provided, Please Provide the uri in settings!"
+            msg = "Database not connected. Connect to continue."
+            await cl.Message(msg).send()
+            return {"role": "client", "content": msg}
         output = await self.query_manager.pipeline(query=text)
         return output
     
-    def update_sql_uri(self, uri):
+    async def update_sql_uri(self, uri):
+        self.query_manager = None
+        if uri is None:
+            self.query_manager = None
+            return
         query_manager = QueryManager(uri=uri)
         if query_manager.get_status():
             self.query_manager = query_manager
+            cl.user_session.set("psql_uri", uri)
+            await cl.Message("Database is Connected!").send()
+        else:
+            await cl.Message("Database Url is Incorrect!").send()
+
+    async def update_client_uri(self, uri):
+        self.client_manager = None
+        if uri is None:
+            self.client_manager = None
+            return
+        client_manager = ClientConnect(uri)
+        if await client_manager.verify():
+            self.client_manager = client_manager
+            cl.user_session.set("client_uri", uri)
+            await cl.Message("Client Machine Connected!").send()
+        else:
+            await cl.Message("Client Url is Incorrect!").send()
 
     async def knowledge_query(self,query):
         if self.light_rag is None:
@@ -115,7 +146,7 @@ class ToolInvoker:
         formatted = "\n### Output From Backend\n\n"
         responses = []
         for idx, item in enumerate(outputs, start=1):
-            if item.get("name") in ["knowledge_query", "search_web"]:
+            if item.get("name") in ["knowledge_query", "search_web", "remote_controller"]:
                 responses.append(item.get("output"))
             elif isinstance(item["output"], dict):
                 item_str = ", ".join(f"{k}: {v}" for k, v in item["output"].items())
@@ -129,14 +160,53 @@ class ToolInvoker:
     async def none(self, **kwargs):
         return "Just Testing the llm Asume Something! the function is not Implement yet..."
     
-json1={
-  "function_calls": [
-    {
-      "name": "search_web",
-      "parameters": {
-        "query": "latest news"
-      }
-    },
-    ...
-  ]
-}
+    async def run_cmd(self, command: str):
+        if self.client_manager:
+            try:
+                if command.startswith(">"):
+                    cmd = command[1:].split()
+                    params = {}
+                    for param in cmd[1:]:
+                        key, val = param.split("=")
+                        params[key]=val
+                    cmd = cmd[0]
+                    if cmd=="kill":
+                        res = await self.client_manager.non_stream_response("post", "system_manager", "kill_process",**params)
+                        await cl.Message(res.get("message","Unknown Error!")).send()
+                    elif cmd == "create_file":
+                        res = await self.client_manager.non_stream_response("post", "file_service", "create_file",**params)
+                        await cl.Message(res.get("message", "Unknown Error!")).send()
+                    elif cmd == "del_file":
+                        res = await self.client_manager.non_stream_response("post", "file_service", "delete_file",**params)
+                        await cl.Message(res.get("message", "Unknown Error!")).send()
+                    elif cmd == "config":
+                        res = await self.client_manager.non_stream_response("get", "system_manager", "get_config",**params)
+                        await cl.Message(res.get("response", "Unknown Error!")).send()
+                    elif cmd == "list_process":
+                        res = await self.client_manager.non_stream_response("get", "system_manager", "list_process",**params)
+                        await cl.Message(res.get("response", "Unknown Error!")).send()
+                    
+                else:
+                    await self.client_manager.run_cmd(command=command)
+            except Exception as e:
+                cl.Message(f"Invalid Command: {e}")
+
+    async def remote_controller(self, action, **kwargs):
+        if self.client_manager is None:
+            msg = "Client machine not connected. Connect to continue."
+            await cl.Message(msg).send()
+            return {"role": "client", "content": msg}
+        try:
+            params  = self.client_params[action]
+            method = params["method"]
+            main = params["main"]
+            sub = params["sub"]
+            
+            result = await self.client_manager.non_stream_response(method, main, sub, **kwargs)
+            result["role"] = "client"
+            result["content"] = result.get("response")
+            if action in ["get_config", "list_process"]:
+                await cl.Message(result.get("response")).send()
+            return result
+        except Exception as e:
+            return f"Error {e}"

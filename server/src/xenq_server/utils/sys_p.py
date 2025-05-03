@@ -74,11 +74,20 @@ Action:
 {
   "function_calls": [
     {
-      "name": "execute_python",
+      "name": "remote_controller",
       "parameters": {
-        "code": "print(2 + 2)"
+        "action": "create_file"
+        "file_name": "test.py"
+        "content": "print(2 + 2)"
       }
-    }
+    },
+    {
+      "name": "remote_controller",
+      "parameters": {
+        "action": "run_command"
+        "command": "python test.py"
+      }
+    },
   ]
 }
 </tool>
@@ -92,8 +101,7 @@ Action:
 1. `database_query` – Generate and run query from a natural language request on user's database  
 2. `search_web` – Look up live internet results  
 2. `knowledge_query` – Queries the user's documents to retrieve relevant content chunks and generates an answer based on them  
-3. `execute_python` – Run Python code  
-4. `create_file` – Create downloadable files
+4. `remote_controller` - Used to manage and perform remote operations on the user's machine, such as creating files, executing commands, killing processes, and retrieving system configurations.
 
 📦 **Tool Definitions**
 ```json
@@ -122,17 +130,6 @@ Action:
       "returns": "Result of the SQL query in table format."
     },
     {
-      "name": "execute_python",
-      "description": "Runs a Python code snippet and returns the output or any errors.",
-      "parameters": {
-        "code": {
-          "type": "string",
-          "description": "Python code to execute."
-        }
-      },
-      "returns": "Output or error from code execution."
-    },
-    {
       "name": "knowledge_query",
       "description": "Queries the user's documents to retrieve relevant content chunks and generates an answer based on them.",
       "parameters": {
@@ -144,19 +141,40 @@ Action:
       "returns": "Generated answer based on the relevant content retrieved from the user's documents."
     },
     {
-      "name": "create_file",
-      "description": "Creates a file with a given name and content.",
+      "name": "remote_controller",
+      "description": "Controls and manages the client machine remotely by performing actions such as creating/deleting files, killing processes, executing commands, and retrieving system information.",
       "parameters": {
-        "filename": {
+        "action": {
           "type": "string",
-          "description": "Name of the file to create."
+          "options":['create_file', 'write_file', 'delete_file', 'kill_process', 'get_config', 'list_process', 'run_command']
+          "description": "Specifies the action to perform on the client machine. Available options: 'create_file', 'delete_file', 'kill_process', 'get_config', 'list_process', 'run_command'."
+        },
+        "file_name": {
+          "type": "string",
+          "description": "Required when 'action' is 'create_file', 'write_file', 'delete_file'. Name of the file to create or delete on the client machine."
         },
         "content": {
           "type": "string",
-          "description": "Content to write into the file."
-        }
+          "description": "Optional. Content to write when creating a file. Used only when 'action' is 'create_file' or 'write_file'."
+        },
+        "process_name": {
+          "type": "string",
+          "description": "Optional. Name of the process to kill (e.g., 'brave.exe'). Required when 'action' is 'kill_process' if 'port' is not provided."
+        },
+        "port": {
+          "type": "integer",
+          "description": "Optional. Port number whose associated process needs to be killed. Required when 'action' is 'kill_process' if 'process_name' is not provided."
+        },
+        "command": {
+          "type": "string",
+          "description": "Required when 'action' is 'run_command'. A shell command to execute on the client machine (e.g., `start brave.exe 'https://www.google.com/search?q=cat+videos'`, `python script.py`). The command will be executed inside the client's shell environment."
+        },
+        "mode": {
+          "type": "string",
+          "description": "Optional. Used when 'action' is 'write_file'. Mode can be 'overwrite' (default) to replace the file content or 'append' to add content to the end of the file."
+        } 
       },
-      "returns": "Confirmation with file path or error if failed."
+      "returns": "JSON response indicating the success (True/False) and the output or error message from the client machine."
     }
   ]
 }

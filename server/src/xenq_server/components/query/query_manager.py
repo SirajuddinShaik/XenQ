@@ -16,7 +16,7 @@ class QueryManager:
             self.conn_status = True
             self.output_file = "./output.txt"
             print("Connected!")
-        except Exception as e:
+        except Exception:
             self.conn_status = False
         
     def get_status(self):
@@ -39,7 +39,7 @@ class QueryManager:
             row_count = cur.fetchone()[0]
 
             # Get columns
-            cur.execute(f"""
+            cur.execute("""
                 SELECT column_name, data_type, is_nullable
                 FROM information_schema.columns
                 WHERE table_name = %s
@@ -47,7 +47,7 @@ class QueryManager:
             columns = cur.fetchall()
 
             # Get primary keys
-            cur.execute(f"""
+            cur.execute("""
                 SELECT kcu.column_name
                 FROM information_schema.table_constraints tc
                 JOIN information_schema.key_column_usage kcu
@@ -57,7 +57,7 @@ class QueryManager:
             pk_columns = {r[0] for r in cur.fetchall()}
 
             # Get foreign keys
-            cur.execute(f"""
+            cur.execute("""
                 SELECT
                     kcu.column_name,
                     ccu.table_name AS foreign_table,
@@ -106,7 +106,7 @@ class QueryManager:
             row_count = cur.fetchone()[0]
 
             # Get columns
-            cur.execute(f"""
+            cur.execute("""
                 SELECT column_name, data_type, is_nullable
                 FROM information_schema.columns
                 WHERE table_name = %s
@@ -114,7 +114,7 @@ class QueryManager:
             columns = cur.fetchall()
 
             # Get primary keys
-            cur.execute(f"""
+            cur.execute("""
                 SELECT kcu.column_name
                 FROM information_schema.table_constraints tc
                 JOIN information_schema.key_column_usage kcu
@@ -124,7 +124,7 @@ class QueryManager:
             pk_columns = {r[0] for r in cur.fetchall()}
 
             # Get foreign keys
-            cur.execute(f"""
+            cur.execute("""
                 SELECT
                     kcu.column_name,
                     ccu.table_name AS foreign_table,
@@ -167,7 +167,7 @@ class QueryManager:
             # Add sample rows
             cur.execute(f"SELECT * FROM {table} LIMIT 2")
             sample_rows = cur.fetchall()
-            col_names = [col[0] for col in columns]
+            # col_names = [col[0] for col in columns]
 
             schema_output.append("Sample rows:")
             for row in sample_rows:
@@ -192,19 +192,6 @@ class QueryManager:
         self.postgres_cursor.close()
         self.postgres_cursor = self.conn.cursor()
 
-    def execute_query1(self, sql_query = "SELECT * FROM employees1 LIMIT 5;"):
-        try:
-            self.postgres_cursor.execute(sql_query)
-
-            column_names = [desc[0] for desc in self.postgres_cursor.description]
-            rows = self.postgres_cursor.fetchall()
-
-            from tabulate import tabulate
-            formatted_output = tabulate(rows, headers=column_names, tablefmt="github")
-            return formatted_output.strip()
-
-        except Exception as e:
-            return f"Error type: {type(e).__name__}, Error message: {e}"
 
     async def execute_query(self, sql_query="SELECT * FROM employees1 LIMIT 5;"):
         try:
@@ -246,11 +233,18 @@ class QueryManager:
 
     def extract_query(self, text: str) -> str:
         """
-        Extracts the last SQL query from a code block marked with ```sql ... ```
-        Returns the SQL query as a string or a message if no block is found.
+        Extracts the last SQL query from a code block.
+        Supports blocks ending with ``` or ::: after ```sql.
+        Returns the SQL query as a string and a success flag (True/False).
         """
-        pattern = r"```sql\s+(.*?)```"
-        matches = re.findall(pattern, text, re.DOTALL)
+        # First try to match ```sql ... ```
+        pattern_backticks = r"```sql\s+(.*?)```"
+        matches = re.findall(pattern_backticks, text, re.DOTALL)
+
+        if not matches:
+            # If no ``` block, try ```sql ... ::: format
+            pattern_colons = r"```sql\s+(.*?):::"
+            matches = re.findall(pattern_colons, text, re.DOTALL)
 
         if not matches:
             return "No SQL block found", False
@@ -268,6 +262,7 @@ class QueryManager:
         print(llm_output)
         if status:
             query, status = self.extract_query(text=llm_output)
+            print()
             if status:
                 output = await self.execute_query(sql_query = query)
                 return output
