@@ -25,9 +25,10 @@ async def start(*args):
     await cl.ChatSettings(widgets).send()
     await cl.context.emitter.set_commands(commands)
     cl.user_session.set("history", HistoryStore())
-    cl.user_session.set("temperature", 0.8)
+    # cl.user_session.set("temperature", 0.8)
     cl.user_session.set("psql_uri", "")
     cl.user_session.set("client_uri", "")
+    cl.user_session.set("hide_internal", True)
     tool_invoker = ToolInvoker()
     await tool_invoker.setup("/teamspace/studios/this_studio/dickens")
     # await tool_invoker.update_sql_uri("postgresql://admin:admin123@localhost:5432/college") 
@@ -35,7 +36,8 @@ async def start(*args):
 
 
 async def update_settings(settings):
-    cl.user_session.set("temperature",settings["Temperature"])
+    # cl.user_session.set("temperature",settings["Temperature"])
+    cl.user_session.set("hide_internal",settings["hide_internal"])
     psql_uri = cl.user_session.get("psql_uri")
     client_uri = cl.user_session.get("client_uri")
     if psql_uri != settings["psql_uri"] or client_uri != settings["client_uri"]:
@@ -46,7 +48,52 @@ async def update_settings(settings):
         await tool_invoker.update_client_uri(settings["client_uri"])
     print("on_settings_update", settings)
 
-async def stream_response(payload: dict, msg=None):
+# async def stream_response1(payload: dict, msg=None):
+#     headers = {
+#         "Accept": "text/event-stream",
+#         "Content-Type": "application/json"
+#     }
+
+#     if msg is None:
+#         msg = cl.Message(content="", author="xenq")
+#         await msg.send()
+
+#     url = f"{AGENT_URI}/stream"
+#     response = ""
+#     hide = False
+#     hidden = ""
+#     visible = ""
+#     token=""
+
+#     tag_buffer = ""
+#     buffer_limit = 20  # Look back over the last N characters to detect tag boundaries
+
+#     session = await AioHTTPSessionManager.get_session()
+
+#     try:
+#         async with session.post(url, headers=headers, json=payload) as resp:
+#             async for line in resp.content:
+#                 decoded = line.decode("utf-8").strip()
+#                 if decoded.startswith("data:"):
+#                     try:
+#                         data = json.loads(decoded[5:])
+#                         token = data.get("token", "")
+#                         response += token
+#                         await msg.stream_token(token)
+
+#                     except Exception as e:
+#                         print("Streaming error:", e)
+#     except Exception as e:
+#         print("Request failed:", e)
+
+#     return {
+#         "token": token,
+#         "response": response,
+#         "msg": msg
+#     }
+
+async def stream_response(payload: dict, hide_internal, msg=None):
+    print(hide_internal)
     headers = {
         "Accept": "text/event-stream",
         "Content-Type": "application/json"
@@ -58,15 +105,16 @@ async def stream_response(payload: dict, msg=None):
 
     url = f"{AGENT_URI}/stream"
     response = ""
+    token = ""
+    buffer_tokens = []  # Small queue of last few tokens
+    buffer_limit = 5
     hide = False
-    hidden = ""
-    visible = ""
-    token=""
-
-    tag_buffer = ""
-    buffer_limit = 20  # Look back over the last N characters to detect tag boundaries
 
     session = await AioHTTPSessionManager.get_session()
+
+    def check_tag(buffer, tag):
+        combined = "".join(buffer)
+        return tag in combined
 
     try:
         async with session.post(url, headers=headers, json=payload) as resp:
@@ -76,11 +124,40 @@ async def stream_response(payload: dict, msg=None):
                     try:
                         data = json.loads(decoded[5:])
                         token = data.get("token", "")
+
                         response += token
-                        await msg.stream_token(token)
+                        buffer_tokens.append(token)
+
+                        if hide_internal:
+                            # Keep buffer limited
+                            if len(buffer_tokens) > buffer_limit:
+                                # Pop the oldest token
+                                oldest = buffer_tokens.pop(0)
+
+                                if not hide:
+                                    await msg.stream_token(oldest)
+
+                            if not hide:
+                                if check_tag(buffer_tokens, "<internal>"):
+                                    # Stream any tokens BEFORE <internal> and hide
+                                    idx = "".join(buffer_tokens).find("<internal>")
+                                    visible_part = "".join(buffer_tokens)[:idx]
+                                    if visible_part:
+                                        await msg.stream_token(visible_part)
+                                    hide = True
+                                    buffer_tokens.clear()
+                            else:
+                                if check_tag(buffer_tokens, "</internal>"):
+                                    # Resume streaming after </internal>
+                                    idx = "".join(buffer_tokens).find("</internal>") + len("</internal>")
+                                    buffer_tokens = list("".join(buffer_tokens)[idx:])
+                                    hide = False
+                        else:
+                            await msg.stream_token(token)
 
                     except Exception as e:
                         print("Streaming error:", e)
+
     except Exception as e:
         print("Request failed:", e)
 
@@ -93,7 +170,8 @@ async def stream_response(payload: dict, msg=None):
 
 async def on_message(message: cl.Message):
     hist: HistoryStore = cl.user_session.get("history", HistoryStore())
-    temperature = cl.user_session.get("temperature", 0.5)
+    # temperature = cl.user_session.get("temperature", 0.5)
+    hide_internal = cl.user_session.get("hide_internal")
     tool_invoker: ToolInvoker = cl.user_session.get("tool_invoker")
     if message.command == "CommandLink":
         await tool_invoker.run_cmd(command=message.content)
@@ -106,7 +184,7 @@ async def on_message(message: cl.Message):
     prompt = hist.build_prompt()
     print(prompt)
 
-    response = await stream_response({"prompt": prompt, "command": message.command})
+    response = await stream_response({"prompt": prompt, "command": message.command},hide_internal=hide_internal)
     retry_count = 0
     max_retries = 5  # Avoid infinite loops
     hist.append_content("assistant", response.get("response", ""))
@@ -125,7 +203,7 @@ async def on_message(message: cl.Message):
                 response = await stream_response({
                     "prompt": prompt,
                     "command": message.command
-                }, response.get("msg"))
+                },hide_internal=hide_internal, msg = response.get("msg"))
             else:
                 await response.get("msg").update() 
                 break

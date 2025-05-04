@@ -215,11 +215,17 @@ class QueryManager:
             display_output = tabulate(trimmed_rows, headers=column_names, tablefmt="github").strip()
 
             if total_rows > max_display_rows:
-                display_output += f"\n\nNote: Showing {max_display_rows} of total count: {total_rows} rows.\nComplete output saved to {self.output_file}.\nYou can only use this data to process.You can tell user to view the file if necessary."
+                display_output += f"\n\n{total_rows} rows retrieved. Showing top {max_display_rows} rows.\nFull results saved to {self.output_file}."
             else:
-                display_output += f"\n\nComplete output saved to {self.output_file}"
-                await cl.Message(display_output, author = "database").send()
-            return display_output+"\n\nThe table is visible to user you can just continue the swag summarize if nessary."
+                display_output += f"\n\nOutput saved to {self.output_file}"
+            await cl.Message(display_output, author = "database").send()
+            message = (
+                "\n\nThe result table has been presented. You may now continue with summarization or next steps."
+                + (f"\nNote: A total of {total_rows} rows were retrieved from the query. Displaying only the top {max_display_rows} rows here for quick view. Full results are saved to {self.output_file}."
+                if total_rows > max_display_rows else "")
+            )
+
+            return display_output + message
 
         except Exception as e:  
             self.conn.rollback()

@@ -185,11 +185,14 @@ class ToolInvoker:
                     elif cmd == "list_process":
                         res = await self.client_manager.non_stream_response("get", "system_manager", "list_process",**params)
                         await cl.Message(res.get("response", "Unknown Error!")).send()
-                    
+                    else:
+                        await cl.Message("Invalid Command!").send()
                 else:
                     await self.client_manager.run_cmd(command=command)
             except Exception as e:
-                cl.Message(f"Invalid Command: {e}")
+                await cl.Message(f"Invalid Command: {e}").send()
+        else:
+            await cl.Message("Client Machine not connected. Connect to continue.").send()
 
     async def remote_controller(self, action, **kwargs):
         if self.client_manager is None:
@@ -206,7 +209,7 @@ class ToolInvoker:
             result["role"] = "client"
             result["content"] = result.get("response")
             if action in ["get_config", "list_process"]:
-                await cl.Message(result.get("response")).send()
+                await cl.Message(result.get("response","")).send()
             return result
         except Exception as e:
             return f"Error {e}"
