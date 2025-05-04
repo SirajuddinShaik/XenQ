@@ -157,9 +157,12 @@ async def stream_response(payload: dict, hide_internal, msg=None):
 
                     except Exception as e:
                         print("Streaming error:", e)
-
+    
     except Exception as e:
         print("Request failed:", e)
+    finally:
+        if not hide:
+            await msg.stream_token("".join(buffer_tokens))
 
     return {
         "token": token,
