@@ -1,0 +1,64 @@
+@app.post("/summarize")
+async def gen_summary(request: Request):
+    body = await request.json()
+    data = body.get("data", [])
+    content = data["content"]
+    query = body.get("query", "How to Become an AI engineer")
+    summarizer, tokenizer = get_summarizer()
+    # Prepare content for summarization
+    content = [summarize_prompt.format(query=query, content=data) for data in content]
+    
+    # Tokenize inputs
+    inputs = tokenizer(content, return_tensors="pt", padding=True, truncation=True, max_length=1024)
+
+    # Move to GPU if available
+    input_ids = inputs["input_ids"].to(summarizer.device)
+    attention_mask = inputs["attention_mask"].to(summarizer.device)
+    
+    # Add batching (size 4)
+    batch_size = 4
+    num_batches = (len(content) + batch_size - 1) // batch_size  # Ceiling division to get number of batches
+    print(num_batches, len(content))
+    summaries = []
+    
+    # Process in batches
+    for i in range(num_batches):
+        # Create batch slice
+        start_idx = i * batch_size
+        end_idx = min((i + 1) * batch_size, len(content))
+        
+        print((start_idx, end_idx))
+        # Get the batch of inputs
+        batch_input_ids = input_ids[start_idx:end_idx]
+        batch_attention_mask = attention_mask[start_idx:end_idx]
+        # Generate summaries
+        summaries_ids = summarizer.generate(
+            input_ids=batch_input_ids,
+            attention_mask=batch_attention_mask,
+            max_length=130,
+            min_length=0,
+            do_sample=False
+        )
+        
+        # Decode summaries
+        batch_summaries = tokenizer.batch_decode(summaries_ids, skip_special_tokens=True)
+        summaries.extend(batch_summaries)
+    summaries = [chunk for chunk in summaries if query not in chunk]
+    # joined_summary = summarize_prompt.format(query=query, content=" ".join(summaries))
+    # inputs = tokenizer([joined_summary], return_tensors="pt", padding=True, truncation=True, max_length=1024)
+    # summaries_ids = summarizer.generate(
+    #         input_ids=batch_input_ids,
+    #         attention_mask=batch_attention_mask,
+    #         max_length=1000,
+    #         min_length=100,
+    #         do_sample=False
+    #     )
+    # print(summaries_ids)
+    # summary = tokenizer.batch_decode(summaries_ids, skip_special_tokens=True)
+    total = len(summaries)
+    if total > 10:
+        indices = sorted(random.sample(range(total), min(10,total)))
+        summaries = [summaries[i] for i in indices]
+    del input_ids
+    del attention_mask
+    return {"output": summaries, "status": 200}

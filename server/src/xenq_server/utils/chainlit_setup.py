@@ -4,7 +4,7 @@ from chainlit.input_widget import TextInput, Slider, Switch
 
 commands: list[CommandDict] = [
     {"id": "CommandLink", "icon": "terminal", "description": "Use the clients cmd prompt", "persistent": True, "button": True},
-    {"id": "Search Web", "icon": "globe", "description": "Find on the web", "persistent": True, "button": True},
+    # {"id": "Search Web", "icon": "globe", "description": "Find on the web", "persistent": True, "button": True},
 ]
 
 widgets = [

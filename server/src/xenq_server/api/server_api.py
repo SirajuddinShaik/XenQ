@@ -185,7 +185,7 @@ async def on_message(message: cl.Message):
         return
 
     prompt = hist.build_prompt()
-    print(prompt)
+    # print(prompt)
 
     response = await stream_response({"prompt": prompt, "command": message.command},hide_internal=hide_internal)
     retry_count = 0

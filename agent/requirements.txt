@@ -1,3 +1,5 @@
 # requirements.txt for agent/requirements.txt
 vllm
+fastapi
+transformers
 -e .

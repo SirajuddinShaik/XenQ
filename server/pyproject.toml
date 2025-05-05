@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xenq_server"
+version = "0.0.0"
+description = "XenQ: An Intelligent RAG-Powered AI Assistant for Seamless Data Interaction"
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+    { name="Sirajuddin Shaik", email="shaiksirajuddin9949@gmail.com" }
+]
+license = { text = "GPL" }
+keywords = ["rag", "llm", "server", "fastapi", "xenq"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    # List runtime dependencies here if needed
+]
+
+[project.urls]
+Homepage = "https://github.com/SirajuddinShaik/XenQ"
+BugTracker = "https://github.com/SirajuddinShaik/XenQ/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]

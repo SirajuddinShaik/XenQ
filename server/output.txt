@@ -1,11 +1,11 @@
-| dept_no   |   emp_no | first_name   | last_name   |   salary |
-|-----------|----------|--------------|-------------|----------|
-| d001      |   466852 | Akemi        | Warwick     |   145128 |
-| d002      |   413137 | Lunjin       | Swick       |   142395 |
-| d003      |   421835 | Yinlin       | Flowers     |   141953 |
-| d004      |   430504 | Youjian      | Cronau      |   138273 |
-| d005      |    13386 | Khosrow      | Sgarro      |   144434 |
-| d006      |   472905 | Shin         | Luck        |   132103 |
-| d007      |    43624 | Tokuyasu     | Pesch       |   158220 |
-| d008      |   425731 | Ramachenga   | Soicher     |   130211 |
-| d009      |    18006 | Vidya        | Hanabata    |   144866 |
+| dept_name          | first_name   | last_name   |   salary | from_date   | to_date    |
+|--------------------|--------------|-------------|----------|-------------|------------|
+| Customer Service   | Vidya        | Hanabata    |   144866 | 2001-08-30  | 9999-01-01 |
+| Development        | Khosrow      | Sgarro      |   144434 | 2002-02-19  | 9999-01-01 |
+| Finance            | Lunjin       | Swick       |   142395 | 2002-04-30  | 9999-01-01 |
+| Human Resources    | Yinlin       | Flowers     |   141953 | 2001-09-01  | 9999-01-01 |
+| Marketing          | Akemi        | Warwick     |   145128 | 2002-05-03  | 9999-01-01 |
+| Production         | Youjian      | Cronau      |   138273 | 2001-10-25  | 9999-01-01 |
+| Quality Management | Shin         | Luck        |   132103 | 2002-06-19  | 9999-01-01 |
+| Research           | Ramachenga   | Soicher     |   130211 | 2002-03-08  | 9999-01-01 |
+| Sales              | Tokuyasu     | Pesch       |   158220 | 2002-03-22  | 9999-01-01 |
