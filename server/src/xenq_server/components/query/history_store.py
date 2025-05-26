@@ -3,6 +3,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from xenq_server.utils.sys_p import p8, p9
+from xenq_server.utils.qwen_sys import qwen
 default_system_msg = "Your next-gen AI assistant, built to understand, generate, and evolve with every query. Ask smart. Get smarter."
 default_system_msg = p9
 class HistoryStore:
@@ -75,7 +76,19 @@ class HistoryStore:
         "table": "#### Query: {query}\nOutput:\n{table}",
         "light_rag": "</internal><|eot_id|><|start_header_id|>rag<|end_header_id|>\n{content}<|eot_id|>",
         "web_whisper": "</internal><|eot_id|><|start_header_id|>WebWhisper<|end_header_id|>\n{content}<|eot_id|>",
-        "backend": "</internal><|start_header_id|>backend<|end_header_id|>\n{content}\n\n- If the backend fails, retry 2–3 times; since internal blocks are hidden, explain the result naturally as if you figured it out, and if all retries fail, inform the user with a clear, friendly explanation of the error.<|eot_id|><|start_header_id|>assistant<|end_header_id|>",
+        "database_query": "</internal><|start_header_id|>backend<|end_header_id|>\n{content}\n\n- If the backend fails, retry 2–3 times; since internal blocks are hidden, explain the result naturally as if you figured it out, and if all retries fail, inform the user with a clear, friendly explanation of the error.<|eot_id|><|start_header_id|>assistant<|end_header_id|>",
         "web_query": "",
         "client": "</internal><|eot_id|><|start_header_id|>remote_controller<|end_header_id|>\n{content}<|eot_id|>"
     }
+    templates1 = {
+    "system": "<|im_start|>system\n{content}<|im_end|>\n",
+    "user": "<|im_start|>user\n{content}<|im_end|>\n<|im_start|>assistant\n",
+    "assistant": "{content}<|im_end|>\n",
+    "memory": "### Memory\n- {content.join('\\n- ')}",
+    "table": "#### Query: {query}\nOutput:\n{table}",
+    "light_rag": "<|im_start|>rag\n{content}<|im_end|>\n",
+    "web_whisper": "<|im_start|>WebWhisper\n{content}<|im_end|>\n",
+    "backend": "<|im_start|>backend\n{content}\n\n- If the backend fails, retry 2–3 times; since internal blocks are hidden, explain the result naturally as if you figured it out, and if all retries fail, inform the user with a clear, friendly explanation of the error.<|im_end|>\n<|im_start|>assistant\n",
+    "web_query": "",  # You can define this based on your web module structure
+    "client": "<|im_start|>remote_controller\n{content}<|im_end|>\n"
+}

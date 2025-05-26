@@ -1,6 +1,6 @@
 import asyncio
 import nest_asyncio
-from vllm import outputs
+# from vllm import outputs
 from xenq_server.api import AioHTTPSessionManager
 import chainlit as cl
 import json
@@ -58,7 +58,7 @@ class LightRag:
         response = await self.rag.query(question, param=QueryParam(mode=mode))
         return response
 
-    async def pipeline(self,query):
+    async def pipeline(self, query, hist):
         try:
             context = await self.rag.query(query=query, param=QueryParam(mode="hybrid", only_need_context=True))
             print("prompted (hybrid)")
@@ -97,8 +97,10 @@ class LightRag:
                             print("Streaming error:", e)
         except Exception as e:
             print("Request failed:", e)
-        await msg.update()
-        return {"role": "light_rag", "content": response}
+            response = str(e)
+        finally:
+            await msg.update()
+            return response
 
 rag_sys_prompt = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 

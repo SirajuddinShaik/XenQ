@@ -100,8 +100,10 @@ class WebQuery:
                             print("Streaming error:", e)
         except Exception as e:
             print("Request failed:", e)
-        await msg.update()  
-        return {"role": "web_whisper", "content": response}
+            response = str(e)
+        finally:
+            await msg.update()  
+            return response
 
 
 

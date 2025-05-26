@@ -2,4 +2,5 @@
 vllm
 fastapi
 transformers
--e .
+uvicorn
+# -e .

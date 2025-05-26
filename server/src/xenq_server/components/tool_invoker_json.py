@@ -1,6 +1,7 @@
 import json
 import re
 import chainlit as cl
+from xenq_server.api.server_api import HistoryStore
 from xenq_server.components import QueryManager, WebQuery, LightRag, ClientConnect
 
 class ToolInvoker:
@@ -62,17 +63,18 @@ class ToolInvoker:
             return ""
 
 
-    async def search_web(self, query: str, top_k = 2, **kwargs):
+    async def search_web(self, hist: HistoryStore, query: str, top_k = 2, **kwargs):
         output = await self.web_query.search_web(query, top_k)
-        return output
+        hist.append_content("web_whisper", output)
     
-    async def sql_query(self, text, **kwargs):
+    async def sql_query(self, text, hist, **kwargs):
         if self.query_manager is None:
             msg = "Database not connected. Connect to continue."
             await cl.Message(msg).send()
-            return {"role": "client", "content": msg}
+            return False
         output = await self.query_manager.pipeline(query=text)
-        return output
+        hist.append_content("database_query", output)
+        return True
     
     async def update_sql_uri(self, uri):
         self.query_manager = None
@@ -100,13 +102,16 @@ class ToolInvoker:
         else:
             await cl.Message("Client Url is Incorrect!").send()
 
-    async def knowledge_query(self,query):
+    async def knowledge_query(self, query, hist:HistoryStore):
         if self.light_rag is None:
-            return "No File Found"
-        output = await self.light_rag.pipeline(query=query)
-        return output
+            output =  "No File Found"
+        else:
+            output = await self.light_rag.pipeline(query=query, hist=hist)
+        hist.append_content("light_rag", output)
+        return False
 
-    async def pipeline(self, internal_text):
+    async def pipeline(self, internal_text, hist):
+        generate = False
         try:
             tool_dict = self.extract_tool_invocation(internal_text)  # List of dicts
             print("tool_dicts", tool_dict)
@@ -118,6 +123,8 @@ class ToolInvoker:
         for function in tool_dict["function_calls"]:
             for function in tool_dict["function_calls"]:
                 func_name = function.get("name")
+                if func_name in ["remote_controller", "database_query"]:
+                    generate = True
                 parameters = function.get("parameters", {})
 
                 # Check for uniqueness
@@ -128,13 +135,15 @@ class ToolInvoker:
 
                 if func_name in self.functions:
                     try:
-                        result = await self.functions[func_name](**parameters)
-                        function["output"] = result
+                        output = await self.functions[func_name](hist = hist, **parameters)
+                        if not output:
+                            generate = False
                     except Exception as e:
-                        function["output"] = f"Function `{func_name}` failed: {e}"
-                else:
-                    function["output"] = f"Unknown function: {func_name}"
-        return self.format_output(tool_dict["function_calls"])
+                        generate = False
+
+            # output = self.format_output(tool_dict["function_calls"])
+            # print(output)
+        return generate
 
     def format_output(self, outputs):
         """
@@ -146,7 +155,7 @@ class ToolInvoker:
         formatted = "\n### Output From Backend\n\n"
         responses = []
         for idx, item in enumerate(outputs, start=1):
-            if item.get("name") in ["knowledge_query", "search_web", "remote_controller"]:
+            if item.get("name") in ["database_query", "remote_controller"]:
                 responses.append(item.get("output"))
             elif isinstance(item["output"], dict):
                 item_str = ", ".join(f"{k}: {v}" for k, v in item["output"].items())
@@ -194,11 +203,12 @@ class ToolInvoker:
         else:
             await cl.Message("Client Machine not connected. Connect to continue.").send()
 
-    async def remote_controller(self, action, **kwargs):
+    async def remote_controller(self, action, hist, **kwargs):
+        result = ""
         if self.client_manager is None:
             msg = "Client machine not connected. Connect to continue."
             await cl.Message(msg).send()
-            return {"role": "client", "content": msg}
+            return False
         try:
             params  = self.client_params[action]
             method = params["method"]
@@ -206,10 +216,13 @@ class ToolInvoker:
             sub = params["sub"]
             
             result = await self.client_manager.non_stream_response(method, main, sub, **kwargs)
-            result["role"] = "client"
-            result["content"] = result.get("response")
-            if action in ["get_config", "list_process"]:
-                await cl.Message(result.get("response","")).send()
-            return result
+            # if action in ["get_config", "list_process"]:
+            await cl.Message(result.get("response","")).send()
+            result = result.get("response")
+            print(result)
         except Exception as e:
-            return f"Error {e}"
+            print(f"Error {e}")
+            result = str(e)
+        finally:
+            hist.append_content("client", result)
+            return False

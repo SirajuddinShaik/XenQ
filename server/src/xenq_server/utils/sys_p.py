@@ -51,7 +51,6 @@ When reasoning or using tools, always wrap it in:
 🧠 **1. ReAct (Reason + Act)** – Use when thinking + tool call happen together:
 ```
 <internal>
-### ReAct Trace:
 Thought: I need to search for this info.
 Action:
 <tool>
@@ -204,7 +203,6 @@ Think deeply. Act wisely. Keep it flowing.
 
 <|eot_id|>
 """
-
 
 
 p5 = """<|begin_of_text|><|start_header_id|>system<|end_header_id|>

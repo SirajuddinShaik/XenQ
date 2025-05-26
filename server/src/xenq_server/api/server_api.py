@@ -30,7 +30,7 @@ async def start(*args):
     cl.user_session.set("client_uri", "")
     cl.user_session.set("hide_internal", True)
     tool_invoker = ToolInvoker()
-    await tool_invoker.setup("/teamspace/studios/this_studio/dickens")
+    await tool_invoker.setup(".dickens")
     # await tool_invoker.update_sql_uri("postgresql://admin:admin123@localhost:5432/college") 
     cl.user_session.set("tool_invoker", tool_invoker)
 
@@ -170,7 +170,6 @@ async def stream_response(payload: dict, hide_internal, msg=None):
         "msg": msg
     }
 
-
 async def on_message(message: cl.Message):
     hist: HistoryStore = cl.user_session.get("history", HistoryStore())
     # temperature = cl.user_session.get("temperature", 0.5)
@@ -183,26 +182,49 @@ async def on_message(message: cl.Message):
     if not status:
         await cl.Message(content="The message length is too big 💪!", author="xenq").send()
         return
+    response = "start"
+    generate = True
+    while generate and response:
+        prompt = hist.build_prompt()
+        print(prompt)
+        response = await stream_response({"prompt": prompt, "command": message.command},hide_internal=hide_internal)
+        generate =  False
+        # if "<|eot_id|>" in response.get("response", "")[-10:]:
+        #     generate = False
+        if "</tool>" in  response.get("response", "")[-10:]:
+            generate = await tool_invoker.pipeline(response.get("response"), hist)
 
-    prompt = hist.build_prompt()
-    # print(prompt)
+async def on_message1(message: cl.Message):
+    hist: HistoryStore = cl.user_session.get("history", HistoryStore())
+    # temperature = cl.user_session.get("temperature", 0.5)
+    hide_internal = cl.user_session.get("hide_internal")
+    tool_invoker: ToolInvoker = cl.user_session.get("tool_invoker")
+    if message.command == "CommandLink":
+        await tool_invoker.run_cmd(command=message.content)
+        return
+    status = hist.append_content(role="user", content=message.content)
+    if not status:
+        await cl.Message(content="The message length is too big 💪!", author="xenq").send()
+        return
+
+    # prompt = hist.build_prompt()
+    # # print(prompt)
 
     response = await stream_response({"prompt": prompt, "command": message.command},hide_internal=hide_internal)
     retry_count = 0
     max_retries = 5  # Avoid infinite loops
     hist.append_content("assistant", response.get("response", ""))
-    while response.get("token") != "<|eot_id|>" and response.get("response", False) and retry_count < max_retries:
+    while response.get("token") not in ["<|im_end|>", "<|eot_id|>"] and response.get("response", False) and retry_count < max_retries:
         retry_count += 1
         # Check if response ends with '</tool>​' to decide on tool use
         if "</tool>" in  response.get("response", "")[-10:]:
-            output, llm_responses = await tool_invoker.pipeline(response.get("response"))
+            output, llm_responses = await tool_invoker.pipeline(response.get("response"), hist)
             for llm_response in llm_responses:
                 hist.append_content(llm_response["role"], llm_response["content"])
             if output:
                 print("output: ", output)
                 hist.append_content("backend", output)
                 prompt = hist.build_prompt()
-                # Reset internal reasoning before the next call
                 response = await stream_response({
                     "prompt": prompt,
                     "command": message.command

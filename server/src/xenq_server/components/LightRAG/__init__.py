@@ -1,1 +1,1 @@
-from tool import LightRag
+from .tool import LightRag
